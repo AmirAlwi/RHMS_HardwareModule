@@ -712,6 +712,11 @@ void getSSID_PASSWORD()
 }
 
 void uploadActivity(char* documentPath){
+
+    if (Firebase.ready()) {
+    Serial.println("token ready");
+  }
+  
     if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
     Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
   else
