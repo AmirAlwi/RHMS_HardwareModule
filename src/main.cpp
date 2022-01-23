@@ -63,6 +63,7 @@ FirebaseJson doc;
 String WIFI_SSID = "";
 String WIFI_PASSWORD = "";
 String UID = "";
+String documentPath = "demo";
 
 Button StartStopBtn = {18, false};
 Button NextBtn = {19, false};
@@ -79,8 +80,9 @@ int8_t validSPO2;
 int32_t heartRate;
 int32_t heartRateBuffer[20];
 int8_t validHeartRate;
-
 int32_t hrAvg = 0;
+
+bool viewOnly = false;
 
 // function prototype
 void IRAM_ATTR Next();
@@ -96,22 +98,22 @@ void ConfigOperation();
 void mainMenuText(char *num, char *text);
 void settingMenuText(char *text1, char *text2);
 void batteryMenu();
-void BatteryMenuText(char *text1);
+void batteryMenuText(char *text1);
 void setupI2c();
 void setupMax30102();
 void setupMpu();
 void recordMpu();
 void recordSpoHeartrate();
-void recordTemperature();
+void recordTemperature(int jsonArrayCounter);
 void warmUpMax(int32_t length);
 void warmUpMpu();
 void setupMlx();
-void runOperation(int *program_selection);
+void selectOperation(int *program_selection);
 void startActivity();
 void initiateFirestore();
 void connectWifi();
 void getSSID_PASSWORD();
-void uploadActivity(char* documentPath);
+void uploadActivity();
 
 void setup()
 {
@@ -139,8 +141,7 @@ void setup()
   getSSID_PASSWORD();
   initiateFirestore();
 
-  //display startup image
-
+  // display startup image
 }
 
 void loop()
@@ -151,7 +152,7 @@ void loop()
 
   program_selection = menu();
 
-  runOperation(program_selection);
+  selectOperation(program_selection);
 
   delay(1000);
 }
@@ -427,7 +428,7 @@ void batteryMenu()
   // selection number, use to return selection value
   int current_sel = 1;
 
-  BatteryMenuText("Percentage");
+  batteryMenuText("Percentage");
   display.setTextSize(2);
   display.print(FuelGauge.getSoC());
   display.print(" %");
@@ -448,7 +449,7 @@ void batteryMenu()
       // change current selection
       if (current_sel == 4)
       {
-        BatteryMenuText("Percentage");
+        batteryMenuText("Percentage");
         display.print(FuelGauge.getSoC());
         display.print(" %");
         display.display();
@@ -456,11 +457,11 @@ void batteryMenu()
       }
       else if (current_sel == 2)
       {
-        BatteryMenuText("Remaining");
+        batteryMenuText("Remaining");
       }
       else if (current_sel == 3)
       {
-        BatteryMenuText("Voltage");
+        batteryMenuText("Voltage");
         display.print(FuelGauge.getVCell());
         display.print(" V");
         display.display();
@@ -477,7 +478,7 @@ void batteryMenu()
   delay(100);
 }
 
-void BatteryMenuText(char *text1)
+void batteryMenuText(char *text1)
 {
   display.clearDisplay();
   // Battery Menu
@@ -588,25 +589,21 @@ void setupMlx()
   }
 }
 
-void recordSpoHeartrate()
+void recordSpoHeartrate(int jsonArrayCounter)
 {
 
-  // if (count > 3)
-  // {
-  //   count = 0;
-  //   hrAvg = 0;
-  // }
-  // if (heartRate > 0)
-  // {
-  //   hrAvg = hrAvg + heartRate - 10;
-  //   count++;
-  // }
+  int32_t averageHeartRate = hrAvg / 20;
+  if (!viewOnly)
+  {
+    doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
+    doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
+  }
 
-  Serial.print(F(", HR="));
-  Serial.print(heartRate - 10, DEC);
+  // Serial.print(F(", HR="));
+  // Serial.print(heartRate - 10, DEC);
 
   Serial.print(F(", Avg HR="));
-  Serial.print(hrAvg / 20, DEC);
+  Serial.print(averageHeartRate, DEC);
 
   Serial.print(F(", SPO2="));
   Serial.println(spo2, DEC);
@@ -622,13 +619,17 @@ void recordMpu()
   Serial.println(mpu.getRoll(), 1);
 }
 
-void recordTemperature()
+void recordTemperature(int jsonArrayCounter)
 {
-  Serial.print("Body = ");
-  Serial.print(mlx.readObjectTempC());
+  float temperature = mlx.readObjectTempC();
 
+  if (!viewOnly)
+  {
+    doc.set(String(temperatureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", temperature);
+  }
+  Serial.print("Body = ");
+  Serial.print(temperature);
   Serial.println("*C");
-  Serial.println();
 }
 
 void warmUpMpu()
@@ -692,8 +693,9 @@ void connectWifi()
     Serial.print(".");
     delay(1000);
     i++;
-    if(i>60){
-      //display fail connect, check connection
+    if (i > 60)
+    {
+      // display fail connect, check connection
       break;
     }
   }
@@ -706,28 +708,41 @@ void getSSID_PASSWORD()
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
   storeSetting.end();
 
-  if (WIFI_SSID.equals("NULL")){
+  if (WIFI_SSID.equals("NULL"))
+  {
     ConfigureWifi();
   }
 }
 
-void uploadActivity(char* documentPath){
+void uploadActivity()
+{
+  connectWifi();
 
-    if (Firebase.ready()) {
+  if (Firebase.ready())
+  {
     Serial.println("token ready");
   }
-  
-    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
-    Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
+
+  if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
+  {
+    // Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
+    // DISPLAY DONE UPLOAD
+    WiFi.mode(WIFI_OFF);
+    doc.clear();
+  }
   else
+  {
     Serial.println(fbdo.errorReason());
+    // retry
+  }
 }
 
-void runOperation(int program_selection)
+void selectOperation(int program_selection)
 {
   if (program_selection == 1)
   {
     startActivity();
+    uploadActivity();
   }
   else if (program_selection == 2)
   {
@@ -753,7 +768,7 @@ void startActivity()
   bufferLength = 90;
   bool newActivity = true;
   int count = 0;
-  int jsonArrayCounter =0;
+  int jsonArrayCounter = 0;
 
   warmUpMpu();
 
@@ -806,9 +821,10 @@ void startActivity()
       {
         recordMpu();
         recordSpoHeartrate();
-        recordTemperature();
-
+        recordTemperature(jsonArrayCounter);
         prev_ms = millis();
+
+        jsonArrayCounter++;
       }
     }
     hrAvg = 0;
