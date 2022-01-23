@@ -1,10 +1,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
+#include <SPI.h>
 #include <Preferences.h>
 #include "BluetoothSerial.h"
 #include <Adafruit_GFX.h>
 #include "Adafruit_Sensor.h"
+#include "module.cpp"
 
 #include <Adafruit_SSD1306.h> //oled
 
@@ -42,13 +44,14 @@ Adafruit_MLX90614 mlx;
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
+FirebaseJson doc;
 
 #define API_KEY "AIzaSyDGj1Fouh114V3w65thJrYYNigxP1KjbMQ"
 #define FIREBASE_PROJECT_ID "isdp-testdb"
 #define USER_EMAIL "isdp_esp_default_acc@isdp6.dont.change"
 #define USER_PASSWORD "!adUINsa*(76jka^k12"
 
-#define UID "Vi4wQZdhw8PzYKZXK1ffQH1GJc43"
+// #define UID "Vi4wQZdhw8PzYKZXK1ffQH1GJc43"
 
 #define BtDevice "How'rU_HRMS"
 #define MAX17043_ADDRESS 0x36
@@ -93,7 +96,7 @@ void ConfigOperation();
 void mainMenuText(char *num, char *text);
 void settingMenuText(char *text1, char *text2);
 void batteryMenu();
-void batteryMenuText(char *text1);
+void BatteryMenuText(char *text1);
 void setupI2c();
 void setupMax30102();
 void setupMpu();
@@ -107,6 +110,8 @@ void runOperation(int *program_selection);
 void startActivity();
 void initiateFirestore();
 void connectWifi();
+void getSSID_PASSWORD();
+void uploadActivity(char* documentPath);
 
 void setup()
 {
@@ -129,14 +134,13 @@ void setup()
 
   setupMpu();
 
-  // setupMlx();
-  connectWifi();
+  setupMlx();
+
+  getSSID_PASSWORD();
   initiateFirestore();
 
-  Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
-  while (Serial.available() == 0)
-    ;
-  Serial.read();
+  //display startup image
+
 }
 
 void loop()
@@ -257,7 +261,7 @@ void ConfigureWifi()
   settingMenuText("WiFi", "Setting");
   delay(300);
   // bluetooth start
-  SerialBT.begin(BtDevice); // Bluetooth device name
+  SerialBT.begin(BtDevice);
 
   settingMenuText("Receiving:", "SSID");
   static uint32_t prev_ms = millis();
@@ -516,7 +520,6 @@ void configureOled()
 
 void configureFuelGauge()
 {
-  FuelGauge.begin(0x36);
   FuelGauge.reset();
   FuelGauge.quickStart();
 }
@@ -621,11 +624,11 @@ void recordMpu()
 
 void recordTemperature()
 {
-  // Serial.print("Body = ");
-  // Serial.print(mlx.readObjectTempC());
+  Serial.print("Body = ");
+  Serial.print(mlx.readObjectTempC());
 
-  // Serial.println("*C");
-  // Serial.println();
+  Serial.println("*C");
+  Serial.println();
 }
 
 void warmUpMpu()
@@ -669,6 +672,8 @@ void warmUpMax(int32_t length)
 
 void initiateFirestore()
 {
+  connectWifi();
+
   config.api_key = API_KEY;
   auth.user.email = USER_EMAIL;
   auth.user.password = USER_PASSWORD;
@@ -676,17 +681,44 @@ void initiateFirestore()
   Firebase.begin(&config, &auth);
 }
 
-void connectWifi(){
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+void connectWifi()
+{
+  int i = 0;
+  WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
   Serial.print("connectiing to wifi");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     Serial.print(".");
     delay(1000);
+    i++;
+    if(i>60){
+      //display fail connect, check connection
+      break;
+    }
   }
 }
 
-void runOperation(int *program_selection)
+void getSSID_PASSWORD()
+{
+  storeSetting.begin("rhms-app", false);
+  WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
+  WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
+  storeSetting.end();
+
+  if (WIFI_SSID.equals("NULL")){
+    ConfigureWifi();
+  }
+}
+
+void uploadActivity(char* documentPath){
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
+    Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
+  else
+    Serial.println(fbdo.errorReason());
+}
+
+void runOperation(int program_selection)
 {
   if (program_selection == 1)
   {
@@ -716,6 +748,7 @@ void startActivity()
   bufferLength = 90;
   bool newActivity = true;
   int count = 0;
+  int jsonArrayCounter =0;
 
   warmUpMpu();
 
@@ -768,7 +801,7 @@ void startActivity()
       {
         recordMpu();
         recordSpoHeartrate();
-        // recordTemperature();
+        recordTemperature();
 
         prev_ms = millis();
       }
