@@ -95,7 +95,7 @@ void configureFuelGauge();
 void ConfigureWifi();
 void ConfigOperation();
 void ConfigureUid();
-void connectWifi();
+bool connectWifi();
 void getSSID_PASSWORD();
 void initiateFirestore();
 int menu();
@@ -112,9 +112,10 @@ void setupMpu();
 void setupMlx();
 void startActivity();
 bool uploadActivity();
+void uploadSituationalControlLoop();
 void warmUpMpu();
 void warmUpMax(int32_t length);
-void uploadSituationalControlLoop();
+void wifiSituationalControlLoop();
 
 void setup()
 {
@@ -180,12 +181,12 @@ int menu()
       // change current selection
       if (current_sel == 6)
       {
-        mainMenuText("1.", "Activity","Menu :");
+        mainMenuText("1.", "RTM Rec.","Menu :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "Real Time","Menu :");
+        mainMenuText("2.", "View Only","Menu :");
       }
       else if (current_sel == 3)
       {
@@ -674,7 +675,10 @@ void warmUpMax(int32_t length)
 
 void initiateFirestore()
 {
-  connectWifi();
+    bool status = connectWifi();
+  if (!status){
+    wifiSituationalControlLoop();
+  }
 
   config.api_key = API_KEY;
   auth.user.email = USER_EMAIL;
@@ -683,7 +687,7 @@ void initiateFirestore()
   Firebase.begin(&config, &auth);
 }
 
-void connectWifi()
+bool connectWifi()
 {
   int i = 0;
   WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
@@ -697,9 +701,10 @@ void connectWifi()
     if (i > 60)
     {
       // display fail connect, check connection
-      break;
+      return false;
     }
   }
+  return true;
 }
 
 void getSSID_PASSWORD()
@@ -717,7 +722,10 @@ void getSSID_PASSWORD()
 
 bool uploadActivity()
 {
-  connectWifi();
+  bool status = connectWifi();
+  if (!status){
+    wifiSituationalControlLoop();
+  }
 
   if (Firebase.ready())
   {
@@ -759,6 +767,7 @@ void selectOperation(int program_selection)
       if (StartStopBtn.state)
       {
         StartStopBtn.state = false;
+        break;
       }
     }
   }
@@ -880,12 +889,12 @@ void uploadSituationalControlLoop()
 
       if (current_sel == 3)
       {
-        mainMenuText("1","Retry Up.","select");
+        mainMenuText("1","Retry Up.","select :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        batteryMenuText("Remaining");
+        mainMenuText("2","Remaining", "select :");
       }
       // reset next button state
       NextBtn.state = false;
@@ -893,19 +902,83 @@ void uploadSituationalControlLoop()
 
     delay(10);
   }
-
+  bool status = true;
   switch (current_sel)
   {
   case 1:
-    uploadActivity();
+    status = uploadActivity();
     break;
   case 2:
     ConfigureWifi();
+    status = uploadActivity();
     break;
   default:
     break;
   }
 
+  if(!status){
+    uploadSituationalControlLoop();
+  }
+
+  // reset startstop button state after operation is selected
+  StartStopBtn.state = false;
+  delay(100);
+}
+
+void wifiSituationalControlLoop(){
+  // selection number, use to return selection value
+  int current_sel = 1;
+
+  display.setTextSize(2);
+  display.setCursor(0,0);
+  display.print("Conn Wifi     Fail!");
+  display.display();
+  delay(2000);
+
+  //Retry Upload
+  //set wifi
+
+  // while not click ok button (StartStop)
+  while (!StartStopBtn.state)
+  {
+
+    // shift selection when Next button detect change state
+    if (NextBtn.state)
+    {
+      current_sel++;
+
+      if (current_sel == 3)
+      {
+        mainMenuText("1","Reconnect","select :");
+        current_sel = 1;
+      }
+      else if (current_sel == 2)
+      {
+        mainMenuText("2","Set Wifi", "select :");
+      }
+      // reset next button state
+      NextBtn.state = false;
+    }
+
+    delay(10);
+  }
+  bool status = true;
+  switch (current_sel)
+  {
+  case 1:
+    status = connectWifi();
+    break;
+  case 2:
+    ConfigureWifi();
+    status = connectWifi();
+    break;
+  default:
+    break;
+  }
+
+  if(!status){
+    wifiSituationalControlLoop();
+  }
 
   // reset startstop button state after operation is selected
   StartStopBtn.state = false;
