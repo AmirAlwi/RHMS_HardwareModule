@@ -101,7 +101,7 @@ void initiateFirestore();
 int menu();
 void mainMenuText(char *num, char *text,char * title);
 void recordMpu();
-void recordSpoHeartrate();
+void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 int settingMenu();
 void selectOperation(int program_selection);
@@ -847,7 +847,7 @@ void startActivity()
       if (millis() > prev_ms + 1000)
       {
         recordMpu();
-        recordSpoHeartrate();
+        recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
         prev_ms = millis();
 
