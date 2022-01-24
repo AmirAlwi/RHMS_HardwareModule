@@ -104,7 +104,7 @@ void recordMpu();
 void recordSpoHeartrate();
 void recordTemperature(int jsonArrayCounter);
 int settingMenu();
-void selectOperation(int *program_selection);
+void selectOperation(int program_selection);
 void settingMenuText(char *text1, char *text2);
 void setupI2c();
 void setupMax30102();
@@ -878,28 +878,35 @@ void uploadSituationalControlLoop()
     {
       current_sel++;
 
-      if (current_sel == 4)
+      if (current_sel == 3)
       {
-        mainMenuText("1","Retry Up.","select")
+        mainMenuText("1","Retry Up.","select");
+        current_sel = 1;
       }
       else if (current_sel == 2)
       {
         batteryMenuText("Remaining");
       }
-      else if (current_sel == 3)
-      {
-        batteryMenuText("Voltage");
-        display.print(FuelGauge.getVCell());
-        display.print(" V");
-        display.display();
-      }
-
       // reset next button state
       NextBtn.state = false;
     }
 
     delay(10);
   }
+
+  switch (current_sel)
+  {
+  case 1:
+    uploadActivity();
+    break;
+  case 2:
+    ConfigureWifi();
+    break;
+  default:
+    break;
+  }
+
+
   // reset startstop button state after operation is selected
   StartStopBtn.state = false;
   delay(100);
