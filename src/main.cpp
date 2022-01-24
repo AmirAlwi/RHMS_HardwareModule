@@ -1,3 +1,4 @@
+#include "module.cpp"
 #include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
@@ -6,7 +7,6 @@
 #include "BluetoothSerial.h"
 #include <Adafruit_GFX.h>
 #include "Adafruit_Sensor.h"
-#include "module.cpp"
 
 #include <Adafruit_SSD1306.h> //oled
 
