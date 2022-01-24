@@ -87,33 +87,34 @@ bool viewOnly = false;
 // function prototype
 void IRAM_ATTR Next();
 void IRAM_ATTR StartStop();
+void batteryMenu();
+void batteryMenuText(char *text1);
 void configureMenuButton();
 void configureOled();
 void configureFuelGauge();
-int menu();
-int settingMenu();
 void ConfigureWifi();
-void ConfigureUid();
 void ConfigOperation();
-void mainMenuText(char *num, char *text);
-void settingMenuText(char *text1, char *text2);
-void batteryMenu();
-void batteryMenuText(char *text1);
-void setupI2c();
-void setupMax30102();
-void setupMpu();
+void ConfigureUid();
+void connectWifi();
+void getSSID_PASSWORD();
+void initiateFirestore();
+int menu();
+void mainMenuText(char *num, char *text,char * title);
 void recordMpu();
 void recordSpoHeartrate();
 void recordTemperature(int jsonArrayCounter);
-void warmUpMax(int32_t length);
-void warmUpMpu();
-void setupMlx();
+int settingMenu();
 void selectOperation(int *program_selection);
+void settingMenuText(char *text1, char *text2);
+void setupI2c();
+void setupMax30102();
+void setupMpu();
+void setupMlx();
 void startActivity();
-void initiateFirestore();
-void connectWifi();
-void getSSID_PASSWORD();
-void uploadActivity();
+bool uploadActivity();
+void warmUpMpu();
+void warmUpMax(int32_t length);
+void uploadSituationalControlLoop();
 
 void setup()
 {
@@ -165,7 +166,7 @@ int menu()
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "Activity");
+  mainMenuText("1.", "Activity","Menu :");
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -179,24 +180,24 @@ int menu()
       // change current selection
       if (current_sel == 6)
       {
-        mainMenuText("1.", "Activity");
+        mainMenuText("1.", "Activity","Menu :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "Real Time");
+        mainMenuText("2.", "Real Time","Menu :");
       }
       else if (current_sel == 3)
       {
-        mainMenuText("3.", "Setting");
+        mainMenuText("3.", "Setting","Menu :");
       }
       else if (current_sel == 4)
       {
-        mainMenuText("4.", "Sleep");
+        mainMenuText("4.", "Sleep","Menu :");
       }
       else if (current_sel == 5)
       {
-        mainMenuText("5.", "Battery");
+        mainMenuText("5.", "Battery","Menu :");
       }
 
       // reset next button state
@@ -220,7 +221,7 @@ int settingMenu()
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "WIFI");
+  mainMenuText("1.", "WIFI","Menu :");
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -234,12 +235,12 @@ int settingMenu()
       // change current selection
       if (current_sel == 3)
       {
-        mainMenuText("1.", "WiFI");
+        mainMenuText("1.", "WiFI","Menu :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "Account");
+        mainMenuText("2.", "Account","Menu :");
       }
 
       // reset next button state
@@ -391,13 +392,13 @@ void ConfigOperation()
   }
 }
 
-void mainMenuText(char *num, char *text)
+void mainMenuText(char *num, char *text, char* title)
 {
   display.clearDisplay();
 
   // Menu
   display.setCursor(0, 0);
-  display.println(F("Menu :"));
+  display.println(F(title));
   display.setCursor(50, 20);
   display.println(F(num));
 
@@ -714,7 +715,7 @@ void getSSID_PASSWORD()
   }
 }
 
-void uploadActivity()
+bool uploadActivity()
 {
   connectWifi();
 
@@ -728,12 +729,16 @@ void uploadActivity()
     // Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
     // DISPLAY DONE UPLOAD
     WiFi.mode(WIFI_OFF);
-    doc.clear();
+    log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
+    doc.clear(); // not tested
+    log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
+    return true;
   }
   else
   {
     Serial.println(fbdo.errorReason());
     // retry
+    return false;
   }
 }
 
@@ -741,8 +746,21 @@ void selectOperation(int program_selection)
 {
   if (program_selection == 1)
   {
-    startActivity();
-    uploadActivity();
+    while (1)
+    {
+      startActivity();
+
+      bool status = uploadActivity();
+      if (!status)
+      {
+        uploadSituationalControlLoop();
+      }
+
+      if (StartStopBtn.state)
+      {
+        StartStopBtn.state = false;
+      }
+    }
   }
   else if (program_selection == 2)
   {
@@ -831,10 +849,60 @@ void startActivity()
 
     if (StartStopBtn.state)
     {
-      StartStopBtn.state = false;
+      // reset button state at the operation funvtion
       break;
     }
   }
+}
+
+void uploadSituationalControlLoop()
+{
+  // selection number, use to return selection value
+  int current_sel = 1;
+
+  display.setTextSize(2);
+  display.setCursor(0,0);
+  display.print("Upload Op.  Fail!");
+  display.display();
+  delay(2000);
+
+  //Retry Upload
+  //set wifi
+
+  // while not click ok button (StartStop)
+  while (!StartStopBtn.state)
+  {
+
+    // shift selection when Next button detect change state
+    if (NextBtn.state)
+    {
+      current_sel++;
+
+      if (current_sel == 4)
+      {
+        mainMenuText("1","Retry Up.","select")
+      }
+      else if (current_sel == 2)
+      {
+        batteryMenuText("Remaining");
+      }
+      else if (current_sel == 3)
+      {
+        batteryMenuText("Voltage");
+        display.print(FuelGauge.getVCell());
+        display.print(" V");
+        display.display();
+      }
+
+      // reset next button state
+      NextBtn.state = false;
+    }
+
+    delay(10);
+  }
+  // reset startstop button state after operation is selected
+  StartStopBtn.state = false;
+  delay(100);
 }
 // interrupt call funcion
 void IRAM_ATTR StartStop()
