@@ -33,6 +33,9 @@ struct Button
   bool state;
 };
 
+// TwoWire I2C2 = TwoWire(1);
+// TwoWire I2C1 = TwoWire(0);
+
 // initiate sensor & module
 BluetoothSerial SerialBT;
 Preferences storeSetting;
@@ -65,11 +68,8 @@ String WIFI_PASSWORD = "";
 String UID = "";
 String documentPath = "demo";
 
-Button StartStopBtn = {18, false};
-Button NextBtn = {19, false};
-
-TwoWire I2C2 = TwoWire(1);
-TwoWire I2C1 = TwoWire(0);
+Button StartStopBtn = {35, false};
+Button NextBtn = {34, false};
 
 uint32_t irBuffer[100];
 uint32_t redBuffer[100];
@@ -99,14 +99,14 @@ bool connectWifi();
 void getSSID_PASSWORD();
 void initiateFirestore();
 int menu();
-void mainMenuText(char *num, char *text,char * title);
+void mainMenuText(char *num, char *text, char *title);
 void recordMpu();
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 int settingMenu();
 void selectOperation(int program_selection);
 void settingMenuText(char *text1, char *text2);
-void setupI2c();
+// void setupI2c();
 void setupMax30102();
 void setupMpu();
 void setupMlx();
@@ -116,29 +116,42 @@ void uploadSituationalControlLoop();
 void warmUpMpu();
 void warmUpMax(int32_t length);
 void wifiSituationalControlLoop();
+void OxyBpm();
+void realTimeDisplay();
+void realTimeText(int c1, int c2, char *text1);
+void initialDisp(char *ini);
 
 void setup()
 {
+  display.setTextSize(1);
 
   Serial.begin(115200);
-  Wire.begin();
+  Wire.begin(SDA2, SCL2, 100000);
+
+  // setupI2c();
+  // initialDisp("I2C");
 
   configureOled();
+  initialDisp("OLED");
 
   configureFuelGauge();
+  initialDisp("FuelGauge");
 
   configureMenuButton();
+  initialDisp("MenuButton");
 
   // lightsleep wakeup button 33 at high awake
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1);
-
-  setupI2c();
+  // initialDisp("sleepEnable");
 
   setupMax30102();
+  initialDisp("setupMAX");
 
   setupMpu();
+  initialDisp("setupMPU");
 
   setupMlx();
+  initialDisp("setupMLX");
 
   getSSID_PASSWORD();
   initiateFirestore();
@@ -159,16 +172,25 @@ void loop()
   delay(1000);
 }
 
+void initialDisp(char *ini)
+{
+  display.clearDisplay();
+  display.setTextSize(2, 2);
+  display.setCursor(15, 15);
+  display.println(F(ini));
+  display.display();
+}
 //####################################################################################################################//
 // menu selection display
 int menu()
 {
+  Serial.println("Menu GO");
+
   // selection number, use to return selection value
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "Activity","Menu :");
-
+  mainMenuText("1.", "Activity", "Menu :");
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
   {
@@ -181,24 +203,24 @@ int menu()
       // change current selection
       if (current_sel == 6)
       {
-        mainMenuText("1.", "RTM Rec.","Menu :");
+        mainMenuText("1.", "RTM Rec.", "Menu :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "View Only","Menu :");
+        mainMenuText("2.", "View Only", "Menu :");
       }
       else if (current_sel == 3)
       {
-        mainMenuText("3.", "Setting","Menu :");
+        mainMenuText("3.", "Setting", "Menu :");
       }
       else if (current_sel == 4)
       {
-        mainMenuText("4.", "Sleep","Menu :");
+        mainMenuText("4.", "Sleep", "Menu :");
       }
       else if (current_sel == 5)
       {
-        mainMenuText("5.", "Battery","Menu :");
+        mainMenuText("5.", "Battery", "Menu :");
       }
 
       // reset next button state
@@ -222,7 +244,7 @@ int settingMenu()
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "WIFI","Menu :");
+  mainMenuText("1.", "WIFI", "Menu :");
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -236,12 +258,12 @@ int settingMenu()
       // change current selection
       if (current_sel == 3)
       {
-        mainMenuText("1.", "WiFI","Menu :");
+        mainMenuText("1.", "WiFI", "Menu :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "Account","Menu :");
+        mainMenuText("2.", "Account", "Menu :");
       }
 
       // reset next button state
@@ -287,7 +309,7 @@ void ConfigureWifi()
     }
   }
 
-  storeSetting.begin("my-app", false);
+  storeSetting.begin("rhms-app", false);
 
   WIFI_SSID = SerialBT.readString();
   WIFI_SSID.remove(WIFI_SSID.length() - 2, 2);
@@ -358,7 +380,7 @@ void ConfigureUid()
     }
   }
 
-  storeSetting.begin("my-app", false);
+  storeSetting.begin("rhms-app", false);
 
   UID = SerialBT.readString();
   UID.remove(UID.length() - 2, 2);
@@ -393,7 +415,7 @@ void ConfigOperation()
   }
 }
 
-void mainMenuText(char *num, char *text, char* title)
+void mainMenuText(char *num, char *text, char *title)
 {
   display.clearDisplay();
 
@@ -515,10 +537,12 @@ void configureOled()
       ; // infinite loop, before proceed
   }
 
+  display.clearDisplay();
   display.setTextSize(2, 2);
   display.setTextColor(SSD1306_WHITE);
+  display.setCursor(15, 15);
+  display.println("How R U :D :3 :P");
   display.display();
-  display.clearDisplay();
 }
 
 void configureFuelGauge()
@@ -527,16 +551,16 @@ void configureFuelGauge()
   FuelGauge.quickStart();
 }
 
-void setupI2c()
-{
-  I2C1.begin(SDA1, SCL1, 400000);
-  I2C2.begin(SDA2, SCL2, 100000);
-}
+// void setupI2c()
+// {
+//   I2C1.begin(SDA1, SCL1, 400000);
+//   I2C2.begin(SDA2, SCL2, 100000);
+// }
 
 void setupMax30102()
 {
 
-  while (!particleSensor.begin(I2C1, I2C_SPEED_FAST, 0x57))
+  while (!particleSensor.begin(Wire, I2C_SPEED_STANDARD, 0x57))
   {
     Serial.println("MAX30102 was not found");
     delay(1000);
@@ -565,7 +589,7 @@ void setupMpu()
   setting.accel_fchoice = 0x01;
   setting.accel_dlpf_cfg = ACCEL_DLPF_CFG::DLPF_45HZ;
 
-  while (!mpu.setup(0x68, setting, I2C2))
+  while (!mpu.setup(0x68))
   { // change to your own address
     Serial.println("MPU connection failed. ");
     delay(1000);
@@ -575,7 +599,7 @@ void setupMpu()
   delay(1);
   mpu.calibrateAccelGyro();
 
-  mpu.calibrateMag();
+  // mpu.calibrateMag();
 
   mpu.setMagneticDeclination(-0.14);
   mpu.setFilterIterations(10);
@@ -584,7 +608,7 @@ void setupMpu()
 
 void setupMlx()
 {
-  while (!mlx.begin(0x5A, &I2C2))
+  while (!mlx.begin(0x5A))
   {
     Serial.println("Could not find a valid MLX9016 sensor, check wiring!");
     delay(1000);
@@ -675,8 +699,9 @@ void warmUpMax(int32_t length)
 
 void initiateFirestore()
 {
-    bool status = connectWifi();
-  if (!status){
+  bool status = connectWifi();
+  if (!status)
+  {
     wifiSituationalControlLoop();
   }
 
@@ -723,7 +748,8 @@ void getSSID_PASSWORD()
 bool uploadActivity()
 {
   bool status = connectWifi();
-  if (!status){
+  if (!status)
+  {
     wifiSituationalControlLoop();
   }
 
@@ -773,7 +799,7 @@ void selectOperation(int program_selection)
   }
   else if (program_selection == 2)
   {
-    Serial.printf("second choice\n");
+    realTimeDisplay();
   }
   else if (program_selection == 3)
   {
@@ -864,19 +890,113 @@ void startActivity()
   }
 }
 
+void OxyBpm()
+{
+  static uint32_t prev_ms = millis();
+  bufferLength = 100;
+  display.clearDisplay();
+  realTimeText(0, 0, "Calculating");
+
+  // calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
+  for (byte i = 0 ; i < bufferLength ; i++)
+  {
+    while (particleSensor.available() == false) //do we have new data?
+      particleSensor.check(); //Check the sensor for new data
+
+    redBuffer[i] = particleSensor.getRed();
+    irBuffer[i] = particleSensor.getIR();
+    particleSensor.nextSample(); //We're finished with this sample so move to next sample
+
+    Serial.print(F("red="));
+    Serial.print(redBuffer[i], DEC);
+    Serial.print(F(", ir="));
+    Serial.println(irBuffer[i], DEC);
+  }
+  maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+
+  // Continuously taking samples from MAX30102.  Heart rate and SpO2 are calculated every 1 second
+  while (1)
+  {
+    // dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
+    for (byte i = 25; i < 100; i++)
+    {
+
+      redBuffer[i - 25] = redBuffer[i];
+      irBuffer[i - 25] = irBuffer[i];
+    }
+
+    // take 25 sets of samples before calculating the heart rate.
+    for (byte i = 75; i < 100; i++)
+    {
+      while (particleSensor.available() == false) // do we have new data?
+        particleSensor.check();                   // Check the sensor for new data
+
+      redBuffer[i] = particleSensor.getRed();
+      irBuffer[i] = particleSensor.getIR();
+      particleSensor.nextSample(); // We're finished with this sample so move to next sample
+
+      // send samples and calculation result to terminal program through UART
+    }
+
+    // After gathering 25 new samples recalculate HR and SP02
+    maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+    if (millis() > prev_ms + 1000)
+    {
+      prev_ms = millis();
+      display.clearDisplay();
+
+      realTimeText(0, 0, "BPM: ");
+      display.setCursor(60, 0);
+      display.print(heartRate);
+
+      realTimeText(0, 25, "SPO2: ");
+      display.setCursor(60, 25);
+      display.print(spo2);
+      realTimeText(0, 45, "'C: ");
+      display.setCursor(60, 45);
+      display.print(mlx.readObjectTempC());
+      display.display();
+    }
+
+    if (StartStopBtn.state)
+    {
+      break;
+    }
+  }
+}
+
+void realTimeDisplay()
+{
+  display.clearDisplay();
+  realTimeText(0, 0, "Real Time Data");
+  while (1)
+  {
+    display.clearDisplay();
+    OxyBpm();
+  }
+}
+
+void realTimeText(int c1, int c2, char *text1)
+{
+  display.setTextSize(2);
+  display.setCursor(c1, c2);
+  display.print(F(text1));
+  display.display();
+}
+
 void uploadSituationalControlLoop()
 {
   // selection number, use to return selection value
   int current_sel = 1;
 
   display.setTextSize(2);
-  display.setCursor(0,0);
+  display.setCursor(0, 0);
   display.print("Upload Op.  Fail!");
   display.display();
   delay(2000);
 
-  //Retry Upload
-  //set wifi
+  // Retry Upload
+  // set wifi
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -889,12 +1009,12 @@ void uploadSituationalControlLoop()
 
       if (current_sel == 3)
       {
-        mainMenuText("1","Retry Up.","select :");
+        mainMenuText("1", "Retry Up.", "select :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2","Remaining", "select :");
+        mainMenuText("2", "Remaining", "select :");
       }
       // reset next button state
       NextBtn.state = false;
@@ -916,7 +1036,8 @@ void uploadSituationalControlLoop()
     break;
   }
 
-  if(!status){
+  if (!status)
+  {
     uploadSituationalControlLoop();
   }
 
@@ -925,18 +1046,19 @@ void uploadSituationalControlLoop()
   delay(100);
 }
 
-void wifiSituationalControlLoop(){
+void wifiSituationalControlLoop()
+{
   // selection number, use to return selection value
   int current_sel = 1;
 
   display.setTextSize(2);
-  display.setCursor(0,0);
+  display.setCursor(0, 0);
   display.print("Conn Wifi     Fail!");
   display.display();
   delay(2000);
 
-  //Retry Upload
-  //set wifi
+  // Retry Upload
+  // set wifi
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -949,12 +1071,12 @@ void wifiSituationalControlLoop(){
 
       if (current_sel == 3)
       {
-        mainMenuText("1","Reconnect","select :");
+        mainMenuText("1", "Reconnect", "select :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2","Set Wifi", "select :");
+        mainMenuText("2", "Set Wifi", "select :");
       }
       // reset next button state
       NextBtn.state = false;
@@ -976,7 +1098,8 @@ void wifiSituationalControlLoop(){
     break;
   }
 
-  if(!status){
+  if (!status)
+  {
     wifiSituationalControlLoop();
   }
 
