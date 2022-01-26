@@ -7,6 +7,9 @@
 #include "BluetoothSerial.h"
 #include <Adafruit_GFX.h>
 #include "Adafruit_Sensor.h"
+#include <SoftwareSerial.h>
+
+#include <TinyGPSPlus.h>
 
 #include <Adafruit_SSD1306.h> //oled
 
@@ -35,19 +38,6 @@ struct Button
 
 // TwoWire I2C2 = TwoWire(1);
 // TwoWire I2C1 = TwoWire(0);
-
-// initiate sensor & module
-BluetoothSerial SerialBT;
-Preferences storeSetting;
-MAX17043 FuelGauge;
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
-MAX30105 particleSensor;
-MPU9250 mpu;
-Adafruit_MLX90614 mlx;
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
-FirebaseJson doc;
 
 #define API_KEY "AIzaSyDGj1Fouh114V3w65thJrYYNigxP1KjbMQ"
 #define FIREBASE_PROJECT_ID "isdp-testdb"
@@ -83,6 +73,24 @@ int8_t validHeartRate;
 int32_t hrAvg = 0;
 
 bool viewOnly = false;
+
+static const int RXPin = 16, TXPin = 17;
+static const uint32_t GPSBaud = 9600;
+
+// initiate sensor & module
+BluetoothSerial SerialBT;
+Preferences storeSetting;
+MAX17043 FuelGauge;
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+MAX30105 particleSensor;
+MPU9250 mpu;
+Adafruit_MLX90614 mlx;
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+FirebaseJson doc;
+TinyGPSPlus gps;
+SoftwareSerial ss(RXPin, TXPin);
 
 // function prototype
 void IRAM_ATTR Next();
@@ -123,35 +131,38 @@ void initialDisp(char *ini);
 
 void setup()
 {
-  display.setTextSize(1);
 
   Serial.begin(115200);
   Wire.begin(SDA2, SCL2, 100000);
 
+  ss.begin(GPSBaud);
+
   // setupI2c();
   // initialDisp("I2C");
 
+  display.setTextSize(2, 2);
+
   configureOled();
-  initialDisp("OLED");
+  initialDisp("Booting Up .");
 
   configureFuelGauge();
-  initialDisp("FuelGauge");
+  initialDisp("Booting Up ..");
 
   configureMenuButton();
-  initialDisp("MenuButton");
+  initialDisp("Booting Up ...");
 
   // lightsleep wakeup button 33 at high awake
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1);
-  // initialDisp("sleepEnable");
+  initialDisp("Booting Up ....");
 
   setupMax30102();
-  initialDisp("setupMAX");
+  initialDisp("Booting Up .....");
 
   setupMpu();
-  initialDisp("setupMPU");
+  initialDisp("Booting Up ......");
 
   setupMlx();
-  initialDisp("setupMLX");
+  initialDisp("Booting Up .......");
 
   getSSID_PASSWORD();
   initiateFirestore();
@@ -175,7 +186,6 @@ void loop()
 void initialDisp(char *ini)
 {
   display.clearDisplay();
-  display.setTextSize(2, 2);
   display.setCursor(15, 15);
   display.println(F(ini));
   display.display();
@@ -699,6 +709,8 @@ void warmUpMax(int32_t length)
 
 void initiateFirestore()
 {
+
+  //displayoled "setting up <newline> firestore"
   bool status = connectWifi();
   if (!status)
   {
@@ -710,6 +722,8 @@ void initiateFirestore()
   auth.user.password = USER_PASSWORD;
   config.token_status_callback = tokenStatusCallback;
   Firebase.begin(&config, &auth);
+
+  //displayoled "Token <newline> retrieved"
 }
 
 bool connectWifi()
@@ -734,6 +748,7 @@ bool connectWifi()
 
 void getSSID_PASSWORD()
 {
+  //displayoled "retrieving <newline> setting"
   storeSetting.begin("rhms-app", false);
   WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
@@ -748,20 +763,25 @@ void getSSID_PASSWORD()
 bool uploadActivity()
 {
   bool status = connectWifi();
+  
   if (!status)
   {
     wifiSituationalControlLoop();
   }
 
-  if (Firebase.ready())
-  {
-    Serial.println("token ready");
+  bool tokenStatus = Firebase.ready();
+  while(!tokenStatus){
+    initiateFirestore();
+    tokenStatus = Firebase.ready();
+    delay(1000);
   }
+  //displayoled "token <newline> ready"
+  Serial.println("token ready");
 
+  //displayoled " uploading"
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
-    // Serial.printf("ok\n%s\n\n", fbdo.payload().c_str());
-    // DISPLAY DONE UPLOAD
+    // displayoled "upload <newline> complete"
     WiFi.mode(WIFI_OFF);
     log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
     doc.clear(); // not tested
@@ -770,8 +790,18 @@ bool uploadActivity()
   }
   else
   {
+    //displayoled "error <newline> upload"
     Serial.println(fbdo.errorReason());
     // retry
+    delay(1000);
+    //displayoled "reupload <newline> data"
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw())){
+      WiFi.mode(WIFI_OFF);
+      doc.clear();
+      return true;
+    }
+    
+    //displayoled "error <newline> upload"
     return false;
   }
 }
@@ -898,14 +928,14 @@ void OxyBpm()
   realTimeText(0, 0, "Calculating");
 
   // calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
-  for (byte i = 0 ; i < bufferLength ; i++)
+  for (byte i = 0; i < bufferLength; i++)
   {
-    while (particleSensor.available() == false) //do we have new data?
-      particleSensor.check(); //Check the sensor for new data
+    while (particleSensor.available() == false) // do we have new data?
+      particleSensor.check();                   // Check the sensor for new data
 
     redBuffer[i] = particleSensor.getRed();
     irBuffer[i] = particleSensor.getIR();
-    particleSensor.nextSample(); //We're finished with this sample so move to next sample
+    particleSensor.nextSample(); // We're finished with this sample so move to next sample
 
     Serial.print(F("red="));
     Serial.print(redBuffer[i], DEC);
@@ -1051,6 +1081,8 @@ void wifiSituationalControlLoop()
   // selection number, use to return selection value
   int current_sel = 1;
 
+  //displayoled 
+  display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(0, 0);
   display.print("Conn Wifi     Fail!");
@@ -1071,12 +1103,12 @@ void wifiSituationalControlLoop()
 
       if (current_sel == 3)
       {
-        mainMenuText("1", "Reconnect", "select :");
+        mainMenuText("1", "Reconnect", "Wifi:");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2", "Set Wifi", "select :");
+        mainMenuText("2", "Setting", "Wifi :");
       }
       // reset next button state
       NextBtn.state = false;
