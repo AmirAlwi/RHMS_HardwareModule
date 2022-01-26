@@ -128,6 +128,7 @@ void OxyBpm();
 void realTimeDisplay();
 void realTimeText(int c1, int c2, char *text1);
 void initialDisp(char *ini);
+void recordGPS();
 
 void setup()
 {
@@ -136,6 +137,15 @@ void setup()
   Wire.begin(SDA2, SCL2, 100000);
 
   ss.begin(GPSBaud);
+  while (ss.available() > 0)
+    if (gps.encode(ss.read()))
+      recordGPS();
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+    while(true);
+  }
 
   // setupI2c();
   // initialDisp("I2C");
@@ -186,7 +196,7 @@ void loop()
 void initialDisp(char *ini)
 {
   display.clearDisplay();
-  display.setCursor(15, 15);
+  display.setCursor(0, 15);
   display.println(F(ini));
   display.display();
 }
@@ -629,11 +639,11 @@ void recordSpoHeartrate(int jsonArrayCounter)
 {
 
   int32_t averageHeartRate = hrAvg / 20;
-  if (!viewOnly)
-  {
-    doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
-    doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
-  }
+  // if (!viewOnly)
+  // {
+  //   doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
+  //   doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
+  // }
 
   // Serial.print(F(", HR="));
   // Serial.print(heartRate - 10, DEC);
@@ -710,7 +720,7 @@ void warmUpMax(int32_t length)
 void initiateFirestore()
 {
 
-  //displayoled "setting up <newline> firestore"
+  // displayoled "setting up <newline> firestore"
   bool status = connectWifi();
   if (!status)
   {
@@ -723,7 +733,7 @@ void initiateFirestore()
   config.token_status_callback = tokenStatusCallback;
   Firebase.begin(&config, &auth);
 
-  //displayoled "Token <newline> retrieved"
+  // displayoled "Token <newline> retrieved"
 }
 
 bool connectWifi()
@@ -748,7 +758,7 @@ bool connectWifi()
 
 void getSSID_PASSWORD()
 {
-  //displayoled "retrieving <newline> setting"
+  // displayoled "retrieving <newline> setting"
   storeSetting.begin("rhms-app", false);
   WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
@@ -763,22 +773,23 @@ void getSSID_PASSWORD()
 bool uploadActivity()
 {
   bool status = connectWifi();
-  
+
   if (!status)
   {
     wifiSituationalControlLoop();
   }
 
   bool tokenStatus = Firebase.ready();
-  while(!tokenStatus){
+  while (!tokenStatus)
+  {
     initiateFirestore();
     tokenStatus = Firebase.ready();
     delay(1000);
   }
-  //displayoled "token <newline> ready"
+  // displayoled "token <newline> ready"
   Serial.println("token ready");
 
-  //displayoled " uploading"
+  // displayoled " uploading"
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     // displayoled "upload <newline> complete"
@@ -790,18 +801,19 @@ bool uploadActivity()
   }
   else
   {
-    //displayoled "error <newline> upload"
+    // displayoled "error <newline> upload"
     Serial.println(fbdo.errorReason());
     // retry
     delay(1000);
-    //displayoled "reupload <newline> data"
-    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw())){
+    // displayoled "reupload <newline> data"
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
+    {
       WiFi.mode(WIFI_OFF);
       doc.clear();
       return true;
     }
-    
-    //displayoled "error <newline> upload"
+
+    // displayoled "error <newline> upload"
     return false;
   }
 }
@@ -905,6 +917,9 @@ void startActivity()
         recordMpu();
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
+        if (ss.available() > 0)
+          if (gps.encode(ss.read()))
+            recordGPS();
         prev_ms = millis();
 
         jsonArrayCounter++;
@@ -1014,6 +1029,57 @@ void realTimeText(int c1, int c2, char *text1)
   display.display();
 }
 
+void recordGPS()
+{
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
+}
+
 void uploadSituationalControlLoop()
 {
   // selection number, use to return selection value
@@ -1081,7 +1147,7 @@ void wifiSituationalControlLoop()
   // selection number, use to return selection value
   int current_sel = 1;
 
-  //displayoled 
+  // displayoled
   display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(0, 0);
