@@ -801,18 +801,20 @@ bool uploadActivity()
 {
   bool status = connectWifi();
 
-  // if (!status)
-  // {
-  //   wifiSituationalControlLoop();
-  // }
+  if (!status)
+  {
+    //wifiSituationalControlLoop();
+    Serial.println("connect to wifi fail");
+  }
 
   bool tokenStatus = Firebase.ready();
-  // while (!tokenStatus)
-  // {
-  //   initiateFirestore();
-  //   tokenStatus = Firebase.ready();
-  //   delay(1000);
-  // }
+  while (!tokenStatus)
+  {
+    // initiateFirestore();
+    // tokenStatus = Firebase.ready();
+    Serial.println("tokan fail");
+    delay(1000);
+  }
   // displayoled "token <newline> ready"
   Serial.println("token ready");
 
@@ -820,10 +822,8 @@ bool uploadActivity()
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     // displayoled "upload <newline> complete"
-    // WiFi.mode(WIFI_OFF);
     doc.clear(); // not tested
-    // log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
-    return true;
+    log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
   }
   else
   {
@@ -842,6 +842,8 @@ bool uploadActivity()
     // displayoled "error <newline> upload"
     return false;
   }
+  // WiFi.mode(WIFI_OFF);
+  return true;
 }
 
 void selectOperation(int program_selection)
