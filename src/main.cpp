@@ -9,7 +9,7 @@
 #include "Adafruit_Sensor.h"
 #include <SoftwareSerial.h>
 
-#include <TinyGPSPlus.h>
+#include <TinyGPSPlus.h> //gps
 
 #include <Adafruit_SSD1306.h> //oled
 
@@ -74,7 +74,7 @@ int32_t hrAvg = 0;
 
 bool viewOnly = false;
 
-static const int RXPin = 16, TXPin = 17;
+static const int RXPin = 19, TXPin = 18;
 static const uint32_t GPSBaud = 9600;
 
 // initiate sensor & module
@@ -128,14 +128,33 @@ void OxyBpm();
 void realTimeDisplay();
 void realTimeText(int c1, int c2, char *text1);
 void initialDisp(char *ini);
+bool recordGPS();
+void setupGPS();
 
 void setup()
 {
 
   Serial.begin(115200);
   Wire.begin(SDA2, SCL2, 100000);
+  Serial.println("starting up");
 
-  ss.begin(GPSBaud);
+  setupGPS();
+
+  for (int i = 0; i < 20; i++)
+  {
+    delay(50);
+    while (ss.available() > 0)
+      if (gps.encode(ss.read()))
+        recordGPS();
+      else
+
+          if (millis() > 5000 && gps.charsProcessed() < 10)
+      {
+        Serial.println(F("No GPS detected: check wiring."));
+        while (true)
+          ;
+      }
+  }
 
   // setupI2c();
   // initialDisp("I2C");
@@ -144,12 +163,15 @@ void setup()
 
   configureOled();
   initialDisp("Booting Up .");
+  delay(50);
 
   configureFuelGauge();
   initialDisp("Booting Up ..");
+  delay(50);
 
   configureMenuButton();
   initialDisp("Booting Up ...");
+  delay(50);
 
   // lightsleep wakeup button 33 at high awake
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1);
@@ -157,6 +179,7 @@ void setup()
 
   setupMax30102();
   initialDisp("Booting Up .....");
+  delay(50);
 
   setupMpu();
   initialDisp("Booting Up ......");
@@ -166,7 +189,6 @@ void setup()
 
   getSSID_PASSWORD();
   initiateFirestore();
-
   // display startup image
 }
 
@@ -183,15 +205,15 @@ void loop()
   delay(1000);
 }
 
+//####################################################################################################################//
+// menu selection display
 void initialDisp(char *ini)
 {
   display.clearDisplay();
-  display.setCursor(15, 15);
+  display.setCursor(0, 15);
   display.println(F(ini));
   display.display();
 }
-//####################################################################################################################//
-// menu selection display
 int menu()
 {
   Serial.println("Menu GO");
@@ -567,6 +589,18 @@ void configureFuelGauge()
 //   I2C2.begin(SDA2, SCL2, 100000);
 // }
 
+void setupGPS()
+{
+  ss.begin(GPSBaud);
+
+  Serial.println(F("DeviceExample.ino"));
+  Serial.println(F("A simple demonstration of TinyGPSPlus with an attached GPS module"));
+  Serial.print(F("Testing TinyGPSPlus library v. "));
+  Serial.println(TinyGPSPlus::libraryVersion());
+  Serial.println(F("by Mikal Hart"));
+  Serial.println();
+}
+
 void setupMax30102()
 {
 
@@ -710,7 +744,7 @@ void warmUpMax(int32_t length)
 void initiateFirestore()
 {
 
-  //displayoled "setting up <newline> firestore"
+  // displayoled "setting up <newline> firestore"
   bool status = connectWifi();
   if (!status)
   {
@@ -723,11 +757,14 @@ void initiateFirestore()
   config.token_status_callback = tokenStatusCallback;
   Firebase.begin(&config, &auth);
 
-  //displayoled "Token <newline> retrieved"
+  // displayoled "Token <newline> retrieved"
 }
 
 bool connectWifi()
 {
+  if (WiFi.isConnected()) {
+    return true;
+  }
   int i = 0;
   WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
   Serial.print("connectiing to wifi");
@@ -739,7 +776,7 @@ bool connectWifi()
     i++;
     if (i > 60)
     {
-      // display fail connect, check connection
+      // displayoled "fail, check <newline> connection
       return false;
     }
   }
@@ -748,7 +785,7 @@ bool connectWifi()
 
 void getSSID_PASSWORD()
 {
-  //displayoled "retrieving <newline> setting"
+  // displayoled "retrieving <newline> setting"
   storeSetting.begin("rhms-app", false);
   WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
@@ -763,45 +800,46 @@ void getSSID_PASSWORD()
 bool uploadActivity()
 {
   bool status = connectWifi();
-  
-  if (!status)
-  {
-    wifiSituationalControlLoop();
-  }
+
+  // if (!status)
+  // {
+  //   wifiSituationalControlLoop();
+  // }
 
   bool tokenStatus = Firebase.ready();
-  while(!tokenStatus){
-    initiateFirestore();
-    tokenStatus = Firebase.ready();
-    delay(1000);
-  }
-  //displayoled "token <newline> ready"
+  // while (!tokenStatus)
+  // {
+  //   initiateFirestore();
+  //   tokenStatus = Firebase.ready();
+  //   delay(1000);
+  // }
+  // displayoled "token <newline> ready"
   Serial.println("token ready");
 
-  //displayoled " uploading"
+  // displayoled " uploading"
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     // displayoled "upload <newline> complete"
-    WiFi.mode(WIFI_OFF);
-    log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
+    // WiFi.mode(WIFI_OFF);
     doc.clear(); // not tested
-    log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
+    // log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
     return true;
   }
   else
   {
-    //displayoled "error <newline> upload"
+    // displayoled "error <newline> upload"
     Serial.println(fbdo.errorReason());
     // retry
-    delay(1000);
-    //displayoled "reupload <newline> data"
-    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw())){
-      WiFi.mode(WIFI_OFF);
-      doc.clear();
-      return true;
-    }
-    
-    //displayoled "error <newline> upload"
+    // delay(1000);
+    // // displayoled "reupload <newline> data"
+    // if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
+    // {
+    //   WiFi.mode(WIFI_OFF);
+    //   doc.clear();
+    //   return true;
+    // }
+
+    // displayoled "error <newline> upload"
     return false;
   }
 }
@@ -810,14 +848,21 @@ void selectOperation(int program_selection)
 {
   if (program_selection == 1)
   {
+    viewOnly = false;
     while (1)
     {
       startActivity();
 
+      if (Firebase.ready())
+      {
+        Serial.println("token ready");
+      }
+
       bool status = uploadActivity();
       if (!status)
       {
-        uploadSituationalControlLoop();
+        // uploadSituationalControlLoop();
+        Serial.println("fail upload");
       }
 
       if (StartStopBtn.state)
@@ -829,6 +874,7 @@ void selectOperation(int program_selection)
   }
   else if (program_selection == 2)
   {
+    viewOnly = true;
     realTimeDisplay();
   }
   else if (program_selection == 3)
@@ -905,7 +951,6 @@ void startActivity()
         recordMpu();
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
-        prev_ms = millis();
 
         jsonArrayCounter++;
       }
@@ -1014,6 +1059,65 @@ void realTimeText(int c1, int c2, char *text1)
   display.display();
 }
 
+bool recordGPS()
+{
+  bool location;
+  Serial.print(F("Location: "));
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+    location = true;
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+    location = false;
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
+  return location;
+}
+
 void uploadSituationalControlLoop()
 {
   // selection number, use to return selection value
@@ -1081,7 +1185,7 @@ void wifiSituationalControlLoop()
   // selection number, use to return selection value
   int current_sel = 1;
 
-  //displayoled 
+  // displayoled
   display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(0, 0);
