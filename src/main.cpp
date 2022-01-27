@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <WiFi.h>
 #include <SPI.h>
+#include "time.h"
 #include <Preferences.h>
 #include "BluetoothSerial.h"
 #include <Adafruit_GFX.h>
@@ -61,6 +62,10 @@ String documentPath = "demo";
 Button StartStopBtn = {35, false};
 Button NextBtn = {34, false};
 
+const char *ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 28800; //+8 hour
+const int daylightOffset_sec = 0;
+
 uint32_t irBuffer[100];
 uint32_t redBuffer[100];
 
@@ -114,7 +119,6 @@ void recordTemperature(int jsonArrayCounter);
 int settingMenu();
 void selectOperation(int program_selection);
 void settingMenuText(char *text1, char *text2);
-// void setupI2c();
 void setupMax30102();
 void setupMpu();
 void setupMlx();
@@ -130,6 +134,7 @@ void realTimeText(int c1, int c2, char *text1);
 void initialDisp(char *ini);
 bool recordGPS();
 void setupGPS();
+unsigned long getTimeMillis();
 
 void setup()
 {
@@ -139,25 +144,31 @@ void setup()
   Serial.println("starting up");
 
   setupGPS();
+  int i = 0;
+  static uint32_t prev_ms = millis();
+  while (i < 20)
+  {
+    if (millis() > (prev_ms + 50))
+    {
+      while (ss.available() > 0)
+        if (gps.encode(ss.read()))
+          recordGPS();
+        else
 
+            if (millis() > 5000 && gps.charsProcessed() < 10)
+        {
+          Serial.println(F("No GPS detected: check wiring."));
+          while (true)
+            ;
+        }
+        prev_ms = millis();
+        i++;
+    }
+  }
   for (int i = 0; i < 20; i++)
   {
     delay(50);
-    while (ss.available() > 0)
-      if (gps.encode(ss.read()))
-        recordGPS();
-      else
-
-          if (millis() > 5000 && gps.charsProcessed() < 10)
-      {
-        Serial.println(F("No GPS detected: check wiring."));
-        while (true)
-          ;
-      }
   }
-
-  // setupI2c();
-  // initialDisp("I2C");
 
   display.setTextSize(2, 2);
 
@@ -189,7 +200,7 @@ void setup()
 
   getSSID_PASSWORD();
   initiateFirestore();
-  // display startup image
+  
 }
 
 void loop()
@@ -214,6 +225,7 @@ void initialDisp(char *ini)
   display.println(F(ini));
   display.display();
 }
+
 int menu()
 {
   Serial.println("Menu GO");
@@ -222,7 +234,7 @@ int menu()
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "Activity", "Menu :");
+  mainMenuText("1.", "RTM Rec.", "Menu :");
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
   {
@@ -583,12 +595,6 @@ void configureFuelGauge()
   FuelGauge.quickStart();
 }
 
-// void setupI2c()
-// {
-//   I2C1.begin(SDA1, SCL1, 400000);
-//   I2C2.begin(SDA2, SCL2, 100000);
-// }
-
 void setupGPS()
 {
   ss.begin(GPSBaud);
@@ -762,7 +768,8 @@ void initiateFirestore()
 
 bool connectWifi()
 {
-  if (WiFi.isConnected()) {
+  if (WiFi.isConnected())
+  {
     return true;
   }
   int i = 0;
@@ -774,12 +781,14 @@ bool connectWifi()
     Serial.print(".");
     delay(1000);
     i++;
-    if (i > 60)
+    if (i > 40)
     {
       // displayoled "fail, check <newline> connection
       return false;
     }
   }
+
+  // displayoled "wifi <newline> connected"
   return true;
 }
 
@@ -803,15 +812,15 @@ bool uploadActivity()
 
   if (!status)
   {
-    //wifiSituationalControlLoop();
+    // wifiSituationalControlLoop();
     Serial.println("connect to wifi fail");
   }
 
   bool tokenStatus = Firebase.ready();
   while (!tokenStatus)
   {
-    // initiateFirestore();
-    // tokenStatus = Firebase.ready();
+    initiateFirestore();
+    tokenStatus = Firebase.ready();
     Serial.println("tokan fail");
     delay(1000);
   }
@@ -822,6 +831,7 @@ bool uploadActivity()
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     // displayoled "upload <newline> complete"
+    Serial.println("upload complete");
     doc.clear(); // not tested
     log_d("Used PSRAM: %d", ESP.getPsramSize() - ESP.getFreePsram());
   }
@@ -906,6 +916,8 @@ void startActivity()
   static uint32_t prev_ms = millis();
 
   warmUpMax(bufferLength);
+
+  static uint32_t startTimeMillis = millis();
 
   while (count < 1800)
   { // operational Loop
@@ -1120,6 +1132,21 @@ bool recordGPS()
   return location;
 }
 
+unsigned long getTimeMillis()
+{
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo))
+  {
+    // Serial.println("Failed to obtain time");
+    return (0);
+  }
+  time(&now);
+  return now * 1000;
+}
+
 void uploadSituationalControlLoop()
 {
   // selection number, use to return selection value
@@ -1201,7 +1228,7 @@ void wifiSituationalControlLoop()
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
   {
-
+    mainMenuText("1", "Reconnect", "Wifi:");
     // shift selection when Next button detect change state
     if (NextBtn.state)
     {
@@ -1222,6 +1249,7 @@ void wifiSituationalControlLoop()
 
     delay(10);
   }
+  Serial.println("outside wifi control loop");
   bool status = true;
   switch (current_sel)
   {
