@@ -122,7 +122,7 @@ void settingMenuText(char *text1, char *text2);
 void setupMax30102();
 void setupMpu();
 void setupMlx();
-void startActivity();
+void startActivity(uint32_t *startTimeMillis);
 bool uploadActivity();
 void uploadSituationalControlLoop();
 void warmUpMpu();
@@ -145,10 +145,10 @@ void setup()
 
   setupGPS();
   int i = 0;
-  static uint32_t prev_ms = millis();
+  static uint32_t prev_gps = millis();
   while (i < 20)
   {
-    if (millis() > (prev_ms + 50))
+    if (millis() > (prev_gps + 50))
     {
       while (ss.available() > 0)
         if (gps.encode(ss.read()))
@@ -161,8 +161,8 @@ void setup()
           while (true)
             ;
         }
-        prev_ms = millis();
-        i++;
+      prev_gps = millis();
+      i++;
     }
   }
   for (int i = 0; i < 20; i++)
@@ -200,7 +200,6 @@ void setup()
 
   getSSID_PASSWORD();
   initiateFirestore();
-  
 }
 
 void loop()
@@ -675,8 +674,13 @@ void recordSpoHeartrate(int jsonArrayCounter)
     doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
   }
 
-  // Serial.print(F(", HR="));
-  // Serial.print(heartRate - 10, DEC);
+  realTimeText(0, 0, "BPM: ");
+  display.setCursor(60, 0);
+  display.print(averageHeartRate);
+
+  realTimeText(0, 25, "SPO2: ");
+  display.setCursor(60, 25);
+  display.print(spo2);
 
   Serial.print(F(", Avg HR="));
   Serial.print(averageHeartRate, DEC);
@@ -703,6 +707,11 @@ void recordTemperature(int jsonArrayCounter)
   {
     doc.set(String(temperatureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", temperature);
   }
+
+  realTimeText(0, 45, "'C: ");
+  display.setCursor(60, 45);
+  display.print(temperature);
+
   Serial.print("Body = ");
   Serial.print(temperature);
   Serial.println("*C");
@@ -860,10 +869,14 @@ void selectOperation(int program_selection)
 {
   if (program_selection == 1)
   {
+    uint32_t startTimeMillis;
     viewOnly = false;
     while (1)
     {
-      startActivity();
+      startActivity(&startTimeMillis);
+
+      Serial.print("time elapsed : ");
+      Serial.println(millis() - startTimeMillis);
 
       if (Firebase.ready())
       {
@@ -886,7 +899,10 @@ void selectOperation(int program_selection)
   }
   else if (program_selection == 2)
   {
+    display.clearDisplay();
+    realTimeText(0, 0, "Real Time Data");
     viewOnly = true;
+
     realTimeDisplay();
   }
   else if (program_selection == 3)
@@ -904,7 +920,7 @@ void selectOperation(int program_selection)
   }
 }
 
-void startActivity()
+void startActivity(uint32_t *startTimeMillis)
 {
   bufferLength = 90;
   bool newActivity = true;
@@ -917,7 +933,7 @@ void startActivity()
 
   warmUpMax(bufferLength);
 
-  static uint32_t startTimeMillis = millis();
+  *startTimeMillis = millis();
 
   while (count < 1800)
   { // operational Loop
@@ -964,8 +980,12 @@ void startActivity()
       {
         recordMpu();
         recordSpoHeartrate(jsonArrayCounter);
-        recordTemperature(jsonArrayCounter);
+        recordTemperature(jsonArrayCounter); // current operation time is 500ms for 3 items
+        
+        display.display();
 
+        prev_ms = millis();
+        
         jsonArrayCounter++;
       }
     }
