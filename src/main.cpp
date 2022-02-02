@@ -116,7 +116,7 @@ void settingMenuText(char *text1, char *text2);
 void setupMax30102();
 void setupMpu();
 void setupMlx();
-void startActivity();
+void startActivity(uint32_t *startTimeMillis);
 bool uploadActivity();
 void uploadSituationalControlLoop();
 void warmUpMpu();
@@ -129,7 +129,7 @@ void initialDisp(char *ini);
 void recordGPS();
 void setupGPS();
 unsigned long getTimeMillis();
-
+void getTimeElapsed(uint32_t *startTimeMillis)
 
 void setup()
 {
@@ -932,6 +932,8 @@ void startActivity(uint32_t *startTimeMillis)
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
 
+        getTimeElapsed(startTimeMillis);
+
         jsonArrayCounter++;
       }
     }
@@ -944,6 +946,22 @@ void startActivity(uint32_t *startTimeMillis)
       break;
     }
   }
+}
+
+void getTimeElapsed(uint32_t *startTimeMillis)
+{
+  timeElapsed = (millis() - *startTimeMillis);
+  int minute = time / (60 * 1000);
+  int second = (time / 1000) % 60;
+  display.setTextSize(2);
+  display.clearDisplay();
+  display.setCursor(0, 15);
+  display.print("Duration ");
+  display.setCursor(10, 40);
+  display.print(minute);
+  display.print(" : ");
+  display.print(second);
+  display.display();
 }
 
 void OxyBpm()
