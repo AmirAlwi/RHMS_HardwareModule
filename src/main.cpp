@@ -59,6 +59,7 @@ Button NextBtn = {34, false};
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 28800; //+8 hour
 const int daylightOffset_sec = 0;
+unsigned long timeElapsed;
 
 uint32_t irBuffer[90];
 uint32_t redBuffer[90];
@@ -129,7 +130,7 @@ void initialDisp(char *ini);
 void recordGPS();
 void setupGPS();
 unsigned long getTimeMillis();
-void getTimeElapsed(uint32_t *startTimeMillis)
+void getTimeElapsed(uint32_t *startTimeMillis);
 
 void setup()
 {
@@ -870,7 +871,6 @@ void startActivity(uint32_t *startTimeMillis)
 {
   bufferLength = 90;
   bool newActivity = true;
-  int count = 0;
   int jsonArrayCounter = 0;
 
   warmUpMpu();
@@ -880,8 +880,8 @@ void startActivity(uint32_t *startTimeMillis)
   warmUpMax(bufferLength);
 
   *startTimeMillis = millis();
-  
-  while (count < 1800)
+
+  while (jsonArrayCounter < 1800)
   { // operational Loop
 
     for (byte i = 25; i < 90; i++)
@@ -922,23 +922,19 @@ void startActivity(uint32_t *startTimeMillis)
 
     if (mpu.update())
     {
-      Serial.print("currnt millis ");
-      Serial.println(millis());
       if (millis() > prev_ms + 940)
       {
-        Serial.println(prev_ms);
         prev_ms = millis();
         recordMpu();
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
-
+        Serial.println(jsonArrayCounter);
         getTimeElapsed(startTimeMillis);
 
         jsonArrayCounter++;
       }
     }
     hrAvg = 0;
-
     if (StartStopBtn.state)
     {
       exitLoop = true;
@@ -951,8 +947,8 @@ void startActivity(uint32_t *startTimeMillis)
 void getTimeElapsed(uint32_t *startTimeMillis)
 {
   timeElapsed = (millis() - *startTimeMillis);
-  int minute = time / (60 * 1000);
-  int second = (time / 1000) % 60;
+  int minute = timeElapsed / (60 * 1000);
+  int second = (timeElapsed / 1000) % 60;
   display.setTextSize(2);
   display.clearDisplay();
   display.setCursor(0, 15);
@@ -1060,7 +1056,7 @@ void realTimeText(int c1, int c2, char *text1)
 
 void recordGPS()
 {
-    Serial.print(F("Location: ")); 
+  Serial.print(F("Location: "));
   if (gps.location.isValid())
   {
     Serial.print(gps.location.lat(), 6);
@@ -1089,16 +1085,20 @@ void recordGPS()
   Serial.print(F(" "));
   if (gps.time.isValid())
   {
-    if (gps.time.hour() < 10) Serial.print(F("0"));
+    if (gps.time.hour() < 10)
+      Serial.print(F("0"));
     Serial.print(gps.time.hour());
     Serial.print(F(":"));
-    if (gps.time.minute() < 10) Serial.print(F("0"));
+    if (gps.time.minute() < 10)
+      Serial.print(F("0"));
     Serial.print(gps.time.minute());
     Serial.print(F(":"));
-    if (gps.time.second() < 10) Serial.print(F("0"));
+    if (gps.time.second() < 10)
+      Serial.print(F("0"));
     Serial.print(gps.time.second());
     Serial.print(F("."));
-    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    if (gps.time.centisecond() < 10)
+      Serial.print(F("0"));
     Serial.print(gps.time.centisecond());
   }
   else
