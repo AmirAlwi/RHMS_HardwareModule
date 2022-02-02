@@ -128,6 +128,8 @@ void realTimeText(int c1, int c2, char *text1);
 void initialDisp(char *ini);
 void recordGPS();
 void setupGPS();
+unsigned long getTimeMillis();
+
 
 void setup()
 {
@@ -188,6 +190,7 @@ void initialDisp(char *ini)
   display.println(F(ini));
   display.display();
 }
+
 int menu()
 {
   Serial.println("Menu GO");
@@ -250,7 +253,7 @@ int settingMenu()
   int current_sel = 1;
 
   // print for the first time, change display to oled
-  mainMenuText("1.", "WIFI", "Menu :");
+  mainMenuText("1.", "WIFI", "Set :");
 
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
@@ -264,12 +267,12 @@ int settingMenu()
       // change current selection
       if (current_sel == 3)
       {
-        mainMenuText("1.", "WiFI", "Menu :");
+        mainMenuText("1.", "WiFI", "Set :");
         current_sel = 1;
       }
       else if (current_sel == 2)
       {
-        mainMenuText("2.", "Account", "Menu :");
+        mainMenuText("2.", "Account", "Set :");
       }
 
       // reset next button state
@@ -817,9 +820,13 @@ void selectOperation(int program_selection)
 {
   if (program_selection == 1)
   {
+    uint32_t startTimeMillis;
     while (1)
     {
-      startActivity();
+      startActivity(&startTimeMillis);
+
+      Serial.print("time elapsed : ");
+      Serial.println(millis() - startTimeMillis);
 
       if (Firebase.ready())
       {
@@ -859,7 +866,7 @@ void selectOperation(int program_selection)
   }
 }
 
-void startActivity()
+void startActivity(uint32_t *startTimeMillis)
 {
   bufferLength = 90;
   bool newActivity = true;
@@ -872,6 +879,8 @@ void startActivity()
 
   warmUpMax(bufferLength);
 
+  *startTimeMillis = millis();
+  
   while (count < 1800)
   { // operational Loop
 
