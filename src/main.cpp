@@ -728,6 +728,14 @@ void initiateFirestore()
 {
 
   // displayoled "setting up <newline> firestore"
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Setting up"));
+  display.setCursor(0, 25);
+  display.println(F("firestore"));
+  //display.display();
+
   bool status = connectWifi();
   if (!status)
   {
@@ -741,6 +749,14 @@ void initiateFirestore()
   Firebase.begin(&config, &auth);
 
   // displayoled "Token <newline> retrieved"
+  display.clearDisplay();
+  // display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Token"));
+  display.setCursor(0, 25);
+  display.println(F("Retrieved"));
+  display.display();
+
 }
 
 bool connectWifi()
@@ -761,6 +777,12 @@ bool connectWifi()
     if (i > 40)
     {
       // displayoled "fail, check <newline> connection
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(F("Fail, Check"));
+      display.setCursor(0, 25);
+      display.println(F("connection"));
+      display.display();
       return false;
     }
   }
@@ -770,6 +792,13 @@ bool connectWifi()
 void getSSID_PASSWORD()
 {
   // displayoled "retrieving <newline> setting"
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("Retrieving"));
+  display.setCursor(0, 25);
+  display.println(F("setting"));
+  display.display();    
+
   storeSetting.begin("rhms-app", false);
   WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
@@ -799,9 +828,20 @@ bool uploadActivity()
     delay(1000);
   }
   // displayoled "token <newline> ready"
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("Token"));
+  display.setCursor(0, 25);
+  display.println(F("Ready"));
+  display.display(); 
+
   Serial.println("token ready");
 
   // displayoled " uploading"
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("Uploading"));
+  display.display(); 
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     Serial.println("upload complete");
@@ -810,6 +850,13 @@ bool uploadActivity()
   else
   {
     // displayoled "error <newline> upload"
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println(F("Error"));
+    display.setCursor(0, 25);
+    display.println(F("Upload"));
+    display.display();
+
     Serial.println(fbdo.errorReason());
 
     return false;
