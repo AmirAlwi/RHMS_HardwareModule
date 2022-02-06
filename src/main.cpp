@@ -127,11 +127,12 @@ void OxyBpm();
 void realTimeDisplay();
 void realTimeText(int c1, int c2, char *text1);
 void initialDisp(char *ini);
-void recordGPS();
+void warmUpGPS();
 void setupGPS();
-unsigned long getTimeMillis();
+unsigned long get_Epoch_Time();
 void getTimeElapsed(uint32_t *startTimeMillis);
-
+void recordTimeMillis(bool isstart);
+void recordGPS();
 void setup()
 {
 
@@ -146,29 +147,29 @@ void setup()
   delay(50);
 
   configureMenuButton();
-  initialDisp("Booting Up ..");
-  delay(50);
 
   // lightsleep wakeup button 33 at high awake
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1);
-  initialDisp("Booting Up ...");
+  initialDisp("Booting Up ..");
   delay(50);
 
   configureFuelGauge();
-  initialDisp("Booting Up ....");
+  initialDisp("Booting Up ...");
 
   setupMax30102();
-  initialDisp("Booting Up .....");
-  delay(50);
+  initialDisp("Booting Up ....");
 
   setupMpu();
-  initialDisp("Booting Up ......");
 
   setupMlx();
-  initialDisp("Booting Up .......");
+  initialDisp("Booting Up ......");
 
   getSSID_PASSWORD();
   initiateFirestore();
+  initialDisp("Booting Up .......");
+
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  initialDisp("Let's Go!!");
 }
 
 void loop()
@@ -579,7 +580,7 @@ void setupGPS()
     delay(50);
     while (ss.available() > 0)
       if (gps.encode(ss.read()))
-        recordGPS();
+        warmUpGPS();
       else
 
           if (millis() > 5000 && gps.charsProcessed() < 10)
@@ -685,6 +686,32 @@ void recordTemperature(int jsonArrayCounter)
   Serial.println("*C");
 }
 
+unsigned long get_Epoch_Time()
+{
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo))
+  {
+    // Serial.println("Failed to obtain time");
+    return (0);
+  }
+  time(&now);
+  return now;
+}
+
+void recordTimeMillis(bool isstart){
+  unsigned long Epoch_Time = get_Epoch_Time();
+  String time_s = String(Epoch_Time) + "000";
+
+  if(isstart){
+    doc.set(String(dateLoc) + "doubleValue", time_s);
+    doc.set(String(starttimeLoc) + "doubleValue", time_s);
+  } else{
+     doc.set(String(endtimeLoc) + "doubleValue", time_s);
+  }
+
+}
+
 void warmUpMpu()
 {
 
@@ -734,7 +761,8 @@ void initiateFirestore()
   display.println(F("Setting up"));
   display.setCursor(0, 25);
   display.println(F("firestore"));
-  //display.display();
+  display.display();
+  delay(300);
 
   bool status = connectWifi();
   if (!status)
@@ -756,7 +784,6 @@ void initiateFirestore()
   display.setCursor(0, 25);
   display.println(F("Retrieved"));
   display.display();
-
 }
 
 bool connectWifi()
@@ -783,6 +810,7 @@ bool connectWifi()
       display.setCursor(0, 25);
       display.println(F("connection"));
       display.display();
+      delay(500);
       return false;
     }
   }
@@ -797,11 +825,12 @@ void getSSID_PASSWORD()
   display.println(F("Retrieving"));
   display.setCursor(0, 25);
   display.println(F("setting"));
-  display.display();    
+  display.display();
 
   storeSetting.begin("rhms-app", false);
   WIFI_SSID = storeSetting.getString("WIFI_SSID", "NULL");
   WIFI_PASSWORD = storeSetting.getString("WIFI_PASSWORD", "NULL");
+  UID = storeSetting.getString("UID", "NULL");
   storeSetting.end();
 
   if (WIFI_SSID.equals("NULL"))
@@ -833,7 +862,7 @@ bool uploadActivity()
   display.println(F("Token"));
   display.setCursor(0, 25);
   display.println(F("Ready"));
-  display.display(); 
+  display.display();
 
   Serial.println("token ready");
 
@@ -841,7 +870,7 @@ bool uploadActivity()
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(F("Uploading"));
-  display.display(); 
+  display.display();
   if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw()))
   {
     Serial.println("upload complete");
@@ -873,8 +902,9 @@ void selectOperation(int program_selection)
     {
       startActivity(&startTimeMillis);
 
-      Serial.print("time elapsed : ");
-      Serial.println(millis() - startTimeMillis);
+      recordGPS();
+      // Serial.print("time elapsed : ");
+      // Serial.println(millis() - startTimeMillis);
 
       if (Firebase.ready())
       {
@@ -886,6 +916,7 @@ void selectOperation(int program_selection)
       {
         // uploadSituationalControlLoop();
         Serial.println("fail upload");
+        doc.clear();
       }
 
       if (exitLoop)
@@ -927,6 +958,11 @@ void startActivity(uint32_t *startTimeMillis)
   warmUpMax(bufferLength);
 
   *startTimeMillis = millis();
+  
+  recordTimeMillis(true);
+  doc.set(String(titleLoc) + "stringValue", "Activity");
+  doc.set(String(uidLoc) + "stringValue", UID);
+  doc.set(String(notesLoc) + "stringValue", "routine monitoring");
 
   while (jsonArrayCounter < 1800)
   { // operational Loop
@@ -975,7 +1011,6 @@ void startActivity(uint32_t *startTimeMillis)
         recordMpu();
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
-        Serial.println(jsonArrayCounter);
         getTimeElapsed(startTimeMillis);
 
         jsonArrayCounter++;
@@ -984,11 +1019,13 @@ void startActivity(uint32_t *startTimeMillis)
     hrAvg = 0;
     if (StartStopBtn.state)
     {
+      recordTimeMillis(false);
       exitLoop = true;
       StartStopBtn.state = false;
       break;
     }
   }
+  recordTimeMillis(false);
 }
 
 void getTimeElapsed(uint32_t *startTimeMillis)
@@ -1101,14 +1138,33 @@ void realTimeText(int c1, int c2, char *text1)
   display.display();
 }
 
-void recordGPS()
+void recordGPS(){
+   if (gps.location.isValid())
+  {
+    float lat = (gps.location.lat(),6);
+    Serial.print(lat, 6);
+    Serial.print(F(","));
+    float lng = (gps.location.lng(),6);
+    Serial.println(lng, 6);
+    doc.set(String(position_latitudeLoc) ,lat);
+    doc.set(String(position_logitudeLoc), lng);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+}
+
+void warmUpGPS()
 {
   Serial.print(F("Location: "));
   if (gps.location.isValid())
   {
-    Serial.print(gps.location.lat(), 6);
+    float lat = (gps.location.lat(),6);
+    Serial.print(lat, 6);
     Serial.print(F(","));
-    Serial.print(gps.location.lng(), 6);
+    float lng = (gps.location.lng(),6);
+    Serial.print(lng, 6);
   }
   else
   {

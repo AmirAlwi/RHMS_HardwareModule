@@ -21,7 +21,8 @@
 #define postureLoc "fields/sensordata/mapValue/fields/posture/arrayValue/values/"
 #define bpUpLoc "fields/sensordata/mapValue/fields/bloodpressure/mapValue/fields/upper/arrayValue/values/"
 #define bpLowLoc "fields/sensordata/mapValue/fields/bloodpressure/mapValue/fields/lower/arrayValue/values/"
-
+#define position_latitudeLoc "fields/sensordata/mapValue/position//geoPointValue/latitude"
+#define position_logitudeLoc "fields/sensordata/mapValue/position//geoPointValue/longitude"
 //for testing mpu9250
 #define yawLoc "fields/sensor/mapValue/fields/orientation/mapValue/fields/yaw/arrayValue/values/"
 #define rollLoc "fields/sensor/mapValue/fields/orientation/mapValue/fields/roll/arrayValue/values/"
