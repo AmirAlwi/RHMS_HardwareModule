@@ -45,13 +45,11 @@ struct Button
 #define BtDevice "How'rU_HRMS"
 #define SDA2 21
 #define SCL2 22
-#define SDA1 18
-#define SCL1 19
 
 String WIFI_SSID = "";
 String WIFI_PASSWORD = "";
 String UID = "";
-String documentPath = "demo";
+String documentPath = "activity";
 
 Button StartStopBtn = {35, false};
 Button NextBtn = {34, false};
@@ -133,6 +131,9 @@ unsigned long get_Epoch_Time();
 void getTimeElapsed(uint32_t *startTimeMillis);
 void recordTimeMillis(bool isstart);
 void recordGPS();
+void sensor_sleep();
+void sensor_wakeup();
+
 void setup()
 {
 
@@ -196,7 +197,6 @@ void initialDisp(char *ini)
 int menu()
 {
   Serial.println("Menu GO");
-
   // selection number, use to return selection value
   int current_sel = 1;
 
@@ -207,8 +207,12 @@ int menu()
   {
 
     // shift selection when Next button detect change state
+
     if (NextBtn.state)
     {
+      Serial.println(NextBtn.state);
+      delay(100);
+      NextBtn.state = false;
       current_sel++;
 
       // change current selection
@@ -237,8 +241,9 @@ int menu()
       // reset next button state
       NextBtn.state = false;
     }
-
     delay(100);
+    NextBtn.state = false;
+    delay(200);
   }
   // reset startstop button state after operation is selected
   StartStopBtn.state = false;
@@ -464,6 +469,7 @@ void settingMenuText(char *text1, char *text2)
 
 void batteryMenu()
 {
+  StartStopBtn.state = false;
   // selection number, use to return selection value
   int current_sel = 1;
 
@@ -581,9 +587,7 @@ void setupGPS()
     while (ss.available() > 0)
       if (gps.encode(ss.read()))
         warmUpGPS();
-      else
-
-          if (millis() > 5000 && gps.charsProcessed() < 10)
+      else if (millis() > 5000 && gps.charsProcessed() < 10)
       {
         Serial.println(F("No GPS detected: check wiring."));
         while (true)
@@ -624,17 +628,39 @@ void setupMpu()
   setting.accel_fchoice = 0x01;
   setting.accel_dlpf_cfg = ACCEL_DLPF_CFG::DLPF_45HZ;
 
-  while (!mpu.setup(0x68))
+  while (!mpu.setup(0x69))
   { // change to your own address
     Serial.println("MPU connection failed. ");
     delay(1000);
   }
 
   mpu.verbose(true);
-  delay(1);
+
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Set sensor"));
+  display.setCursor(0, 25);
+  display.println(F("still"));
+  display.display();
+  delay(100);
+
   mpu.calibrateAccelGyro();
 
-  // mpu.calibrateMag();
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("Wave in 8"));
+  display.setCursor(0, 25);
+  display.println(F("figure"));
+  display.display();
+  delay(100);
+  mpu.calibrateMag();
+
+  display.clearDisplay();
+  display.setCursor(0, 25);
+  display.println(F("Done"));
+  display.display();
+  delay(100);
 
   mpu.setMagneticDeclination(-0.14);
   mpu.setFilterIterations(10);
@@ -699,17 +725,20 @@ unsigned long get_Epoch_Time()
   return now;
 }
 
-void recordTimeMillis(bool isstart){
+void recordTimeMillis(bool isstart)
+{
   unsigned long Epoch_Time = get_Epoch_Time();
   String time_s = String(Epoch_Time) + "000";
 
-  if(isstart){
+  if (isstart)
+  {
     doc.set(String(dateLoc) + "doubleValue", time_s);
     doc.set(String(starttimeLoc) + "doubleValue", time_s);
-  } else{
-     doc.set(String(endtimeLoc) + "doubleValue", time_s);
   }
-
+  else
+  {
+    doc.set(String(endtimeLoc) + "doubleValue", time_s);
+  }
 }
 
 void warmUpMpu()
@@ -902,7 +931,14 @@ void selectOperation(int program_selection)
     {
       startActivity(&startTimeMillis);
 
+      recordTimeMillis(false);
       recordGPS();
+
+      doc.set(String(titleLoc) + "stringValue", "Activity");
+      doc.set(String(uidLoc) + "stringValue", UID);
+      doc.set(String(notesLoc) + "stringValue", "routine monitoring");
+      doc.set(String(bpUpLoc), 0);
+      doc.set(String(bpLowLoc), 0);
       // Serial.print("time elapsed : ");
       // Serial.println(millis() - startTimeMillis);
 
@@ -933,20 +969,46 @@ void selectOperation(int program_selection)
   else if (program_selection == 3)
   {
     ConfigOperation();
+    StartStopBtn.state = false;
   }
   else if (program_selection == 4)
   {
     delay(1000);
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println(F("Sleeping"));
+    display.display();
+    sensor_sleep();
     esp_light_sleep_start();
+    sensor_wakeup();
   }
   else if (program_selection == 5)
   {
     batteryMenu();
   }
+
+  delay(200);
+  StartStopBtn.state = false;
+}
+
+void sensor_sleep()
+{
+  display.dim(true);
+  particleSensor.shutDown();
+  mpu.sleep(true);
+}
+
+void sensor_wakeup()
+{
+  display.dim(false);
+  particleSensor.wakeUp();
+  mpu.sleep(false);
 }
 
 void startActivity(uint32_t *startTimeMillis)
 {
+  Serial.println("running task");
+  StartStopBtn.state = false;
   bufferLength = 90;
   bool newActivity = true;
   int jsonArrayCounter = 0;
@@ -958,11 +1020,8 @@ void startActivity(uint32_t *startTimeMillis)
   warmUpMax(bufferLength);
 
   *startTimeMillis = millis();
-  
+
   recordTimeMillis(true);
-  doc.set(String(titleLoc) + "stringValue", "Activity");
-  doc.set(String(uidLoc) + "stringValue", UID);
-  doc.set(String(notesLoc) + "stringValue", "routine monitoring");
 
   while (jsonArrayCounter < 1800)
   { // operational Loop
@@ -1019,13 +1078,26 @@ void startActivity(uint32_t *startTimeMillis)
     hrAvg = 0;
     if (StartStopBtn.state)
     {
-      recordTimeMillis(false);
-      exitLoop = true;
+      uint32_t longpress = millis();
       StartStopBtn.state = false;
-      break;
+      while (digitalRead(StartStopBtn.PIN) == HIGH)
+      {
+        Serial.println("inside");
+        if (millis() > longpress + 1000)
+        {
+          exitLoop = true;
+          break;
+        }
+      }
+      if (exitLoop)
+      {
+
+        StartStopBtn.state = false;
+        break;
+      }
+      Serial.println("outside");
     }
   }
-  recordTimeMillis(false);
 }
 
 void getTimeElapsed(uint32_t *startTimeMillis)
@@ -1114,6 +1186,7 @@ void OxyBpm()
 
     if (StartStopBtn.state)
     {
+      exitLoop = true;
       break;
     }
   }
@@ -1123,11 +1196,13 @@ void realTimeDisplay()
 {
   display.clearDisplay();
   realTimeText(0, 0, "Real Time Data");
-  while (1)
+  while (!exitLoop)
   {
     display.clearDisplay();
     OxyBpm();
   }
+  exitLoop = false;
+  StartStopBtn.state = false;
 }
 
 void realTimeText(int c1, int c2, char *text1)
@@ -1138,21 +1213,46 @@ void realTimeText(int c1, int c2, char *text1)
   display.display();
 }
 
-void recordGPS(){
-   if (gps.location.isValid())
+void recordGPS()
+{
+  double lat;
+  double lng;
+  bool done = false;
+  for (int i = 0; i < 20; i++)
   {
-    float lat = (gps.location.lat(),6);
-    Serial.print(lat, 6);
-    Serial.print(F(","));
-    float lng = (gps.location.lng(),6);
-    Serial.println(lng, 6);
-    doc.set(String(position_latitudeLoc) ,lat);
-    doc.set(String(position_logitudeLoc), lng);
+    delay(50);
+    while (ss.available() > 0)
+      if (gps.encode(ss.read()))
+      {
+        if (gps.location.isValid())
+        {
+          lat = gps.location.lat();
+          Serial.print(lat);
+          Serial.print(F(","));
+          lng = gps.location.lng();
+          Serial.println(lng);
+          done = true;
+        }
+        else
+        {
+          Serial.print(F("INVALID"));
+        }
+      }
+      else if (millis() > 5000 && gps.charsProcessed() < 10)
+      {
+        Serial.println(F("No GPS detected: check wiring."));
+        while (true)
+          ;
+      }
+
+    if (done)
+    {
+      break;
+    }
   }
-  else
-  {
-    Serial.print(F("INVALID"));
-  }
+
+  doc.set(String(position_latitudeLoc), lat);
+  doc.set(String(position_logitudeLoc), lng);
 }
 
 void warmUpGPS()
@@ -1160,11 +1260,11 @@ void warmUpGPS()
   Serial.print(F("Location: "));
   if (gps.location.isValid())
   {
-    float lat = (gps.location.lat(),6);
-    Serial.print(lat, 6);
+    double lat = (gps.location.lat());
+    Serial.print(lat);
     Serial.print(F(","));
-    float lng = (gps.location.lng(),6);
-    Serial.print(lng, 6);
+    double lng = (gps.location.lng());
+    Serial.print(lng);
   }
   else
   {
