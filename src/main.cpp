@@ -247,7 +247,6 @@ int menu()
   }
   // reset startstop button state after operation is selected
   StartStopBtn.state = false;
-  Serial.println();
   delay(100);
 
   // return selection
@@ -987,7 +986,7 @@ void selectOperation(int program_selection)
     batteryMenu();
   }
 
-  delay(200);
+  delay(100);
   StartStopBtn.state = false;
 }
 
@@ -1078,24 +1077,9 @@ void startActivity(uint32_t *startTimeMillis)
     hrAvg = 0;
     if (StartStopBtn.state)
     {
-      uint32_t longpress = millis();
+      exitLoop = true;
       StartStopBtn.state = false;
-      while (digitalRead(StartStopBtn.PIN) == HIGH)
-      {
-        Serial.println("inside");
-        if (millis() > longpress + 1000)
-        {
-          exitLoop = true;
-          break;
-        }
-      }
-      if (exitLoop)
-      {
-
-        StartStopBtn.state = false;
-        break;
-      }
-      Serial.println("outside");
+      break;
     }
   }
 }
