@@ -271,7 +271,7 @@ int settingMenu()
       current_sel++;
 
       // change current selection
-      if (current_sel == 3)
+      if (current_sel == 4)
       {
         mainMenuText("1.", "WiFI", "Set :");
         current_sel = 1;
@@ -279,6 +279,9 @@ int settingMenu()
       else if (current_sel == 2)
       {
         mainMenuText("2.", "Account", "Set :");
+      }
+      else if (current_sel == 3){
+        mainMenuText("3.", "Exit", "Set :");
       }
 
       // reset next button state
@@ -433,6 +436,9 @@ void ConfigOperation()
   else if (setting_select == 2)
   { // Account
     ConfigureUid();
+  }
+  else if (setting_select == 3){
+    exit;
   }
 }
 
