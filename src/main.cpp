@@ -242,13 +242,12 @@ int menu()
       NextBtn.state = false;
     }
     delay(100);
-    NextBtn.state = false;
-    delay(200);
+    // NextBtn.state = false;
+    // delay(100);
   }
   // reset startstop button state after operation is selected
-  StartStopBtn.state = false;
   delay(100);
-
+  StartStopBtn.state = false;
   // return selection
   return current_sel;
 }
@@ -518,7 +517,7 @@ void batteryMenu()
       NextBtn.state = false;
     }
 
-    delay(10);
+    delay(100);
   }
   // reset startstop button state after operation is selected
   StartStopBtn.state = false;
