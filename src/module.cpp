@@ -24,6 +24,18 @@
 #define position_latitudeLoc "fields/sensordata/mapValue/fields/position/geoPointValue/latitude"
 #define position_logitudeLoc "fields/sensordata/mapValue/fields/position/geoPointValue/longitude"
 //for testing mpu9250
-#define yawLoc "fields/sensor/mapValue/fields/orientation/mapValue/fields/yaw/arrayValue/values/"
-#define rollLoc "fields/sensor/mapValue/fields/orientation/mapValue/fields/roll/arrayValue/values/"
-#define pitchLoc "fields/sensor/mapValue/fields/orientation/mapValue/fields/pitch/arrayValue/values/"
+#define yawLoc "fields/sensordata/mapValue/fields/orientation/mapValue/fields/x/arrayValue/values/"
+#define rollLoc "fields/sensordata/mapValue/fields/orientation/mapValue/fields/y/arrayValue/values/"
+#define pitchLoc "fields/sensordata/mapValue/fields/orientation/mapValue/fields/z/arrayValue/values/"
+
+#define accXLoc "fields/sensordata/mapValue/fields/acceleration/mapValue/fields/x/arrayValue/values/"
+#define accYLoc "fields/sensordata/mapValue/fields/acceleration/mapValue/fields/y/arrayValue/values/"
+#define accZLoc "fields/sensordata/mapValue/fields/acceleration/mapValue/fields/z/arrayValue/values/"
+
+#define magXLoc "fields/sensordata/mapValue/fields/magnet/mapValue/fields/x/arrayValue/values/"
+#define magYLoc "fields/sensordata/mapValue/fields/magnet/mapValue/fields/y/arrayValue/values/"
+#define magZLoc "fields/sensordata/mapValue/fields/magnet/mapValue/fields/z/arrayValue/values/"
+
+#define gyroXLoc "fields/sensordata/mapValue/fields/gyro/mapValue/fields/x/arrayValue/values/"
+#define gyroYLoc "fields/sensordata/mapValue/fields/gyro/mapValue/fields/y/arrayValue/values/"
+#define gyroZLoc "fields/sensordata/mapValue/fields/gyro/mapValue/fields/z/arrayValue/values/"

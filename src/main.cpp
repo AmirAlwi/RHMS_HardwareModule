@@ -64,6 +64,7 @@ uint32_t redBuffer[90];
 
 int32_t bufferLength;
 int32_t spo2;
+int32_t prevSpo2 = 92;
 int8_t validSPO2;
 int32_t heartRate;
 int32_t heartRateBuffer[20];
@@ -106,7 +107,7 @@ void getSSID_PASSWORD();
 void initiateFirestore();
 int menu();
 void mainMenuText(char *num, char *text, char *title);
-void recordMpu();
+void recordMpu(int jsonArrayCOunter);
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 int settingMenu();
@@ -686,8 +687,12 @@ void recordSpoHeartrate(int jsonArrayCounter)
 
   int32_t averageHeartRate = hrAvg / 20;
 
+  if(spo2 > 0){
+    prevSpo2 = spo2;
+  }
+
   doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
-  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
+  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", prevSpo2);
 
   Serial.print(F(", Avg HR="));
   Serial.print(averageHeartRate, DEC);
@@ -696,7 +701,7 @@ void recordSpoHeartrate(int jsonArrayCounter)
   Serial.println(spo2, DEC);
 }
 
-void recordMpu()
+void recordMpu(int jsonArrayCounter)
 {
   Serial.println("Yaw, Pitch, Roll: added to doc");
   Serial.print(mpu.getYaw(), 1);
@@ -704,6 +709,23 @@ void recordMpu()
   Serial.print(mpu.getPitch(), 1);
   Serial.print(", ");
   Serial.println(mpu.getRoll(), 1);
+
+  doc.set(String(yawLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getYaw());
+  doc.set(String(pitchLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getPitch());
+  doc.set(String(rollLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getRoll());
+
+  doc.set(String(accXLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getAccX());
+  doc.set(String(accYLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getAccY());
+  doc.set(String(accZLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getAccZ());
+
+  doc.set(String(magXLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getMagX());
+  doc.set(String(magYLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getMagY());
+  doc.set(String(magZLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getMagZ());
+
+  doc.set(String(gyroXLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroX());
+  doc.set(String(gyroYLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroY());
+  doc.set(String(gyroZLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroZ());
+
 }
 
 void recordTemperature(int jsonArrayCounter)
@@ -937,11 +959,11 @@ void selectOperation(int program_selection)
       startActivity(&startTimeMillis);
 
       recordTimeMillis(false);
-      recordGPS();
+      // recordGPS();
 
       doc.set(String(titleLoc) + "stringValue", "Activity");
       doc.set(String(uidLoc) + "stringValue", UID);
-      doc.set(String(notesLoc) + "stringValue", "routine monitoring");
+      doc.set(String(notesLoc) + "stringValue", "dataset gathering");
       doc.set(String(bpUpLoc), 0);
       doc.set(String(bpLowLoc), 0);
       // Serial.print("time elapsed : ");
@@ -1072,7 +1094,7 @@ void startActivity(uint32_t *startTimeMillis)
       if (millis() > prev_ms + 940)
       {
         prev_ms = millis();
-        recordMpu();
+        recordMpu(jsonArrayCounter);
         recordSpoHeartrate(jsonArrayCounter);
         recordTemperature(jsonArrayCounter);
         getTimeElapsed(startTimeMillis);
@@ -1104,6 +1126,7 @@ void getTimeElapsed(uint32_t *startTimeMillis)
   display.print(" : ");
   display.print(second);
   display.display();
+  Serial.println("done display");
 }
 
 void OxyBpm()
