@@ -135,6 +135,8 @@ void recordGPS();
 void sensor_sleep();
 void sensor_wakeup();
 
+void monitorMPU(uint32_t *startTimeMillis);
+
 void setup()
 {
 
@@ -155,7 +157,7 @@ void setup()
   initialDisp("Booting Up ..");
   delay(50);
 
-  configureFuelGauge();
+  // configureFuelGauge();
   initialDisp("Booting Up ...");
 
   setupMax30102();
@@ -217,7 +219,7 @@ int menu()
       current_sel++;
 
       // change current selection
-      if (current_sel == 6)
+      if (current_sel == 7)
       {
         mainMenuText("1.", "RTM Rec.", "Menu :");
         current_sel = 1;
@@ -237,6 +239,10 @@ int menu()
       else if (current_sel == 5)
       {
         mainMenuText("5.", "Battery", "Menu :");
+      }
+      else if (current_sel == 6)
+      {
+        mainMenuText("6.", "Rec Mpu", "Menu :");
       }
 
       // reset next button state
@@ -281,7 +287,8 @@ int settingMenu()
       {
         mainMenuText("2.", "Account", "Set :");
       }
-      else if (current_sel == 3){
+      else if (current_sel == 3)
+      {
         mainMenuText("3.", "Exit", "Set :");
       }
 
@@ -438,7 +445,8 @@ void ConfigOperation()
   { // Account
     ConfigureUid();
   }
-  else if (setting_select == 3){
+  else if (setting_select == 3)
+  {
     exit;
   }
 }
@@ -687,7 +695,8 @@ void recordSpoHeartrate(int jsonArrayCounter)
 
   int32_t averageHeartRate = hrAvg / 20;
 
-  if(spo2 > 0){
+  if (spo2 > 0)
+  {
     prevSpo2 = spo2;
   }
 
@@ -725,7 +734,6 @@ void recordMpu(int jsonArrayCounter)
   doc.set(String(gyroXLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroX());
   doc.set(String(gyroYLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroY());
   doc.set(String(gyroZLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", mpu.getGyroZ());
-
 }
 
 void recordTemperature(int jsonArrayCounter)
@@ -969,10 +977,10 @@ void selectOperation(int program_selection)
       // Serial.print("time elapsed : ");
       // Serial.println(millis() - startTimeMillis);
 
-      if (Firebase.ready())
-      {
-        Serial.println("token ready");
-      }
+      // if (Firebase.ready())
+      // {
+      //   Serial.println("token ready");
+      // }
 
       bool status = uploadActivity();
       if (!status)
@@ -1012,6 +1020,61 @@ void selectOperation(int program_selection)
   else if (program_selection == 5)
   {
     batteryMenu();
+  }
+  else if (program_selection == 6)
+  {
+    uint32_t startTestTimeMillis;
+    while (1)
+    {
+      monitorMPU(&startTestTimeMillis);
+
+      recordTimeMillis(false);
+
+      doc.set(String(titleLoc) + "stringValue", "Dat Gathering");
+      doc.set(String(uidLoc) + "stringValue", UID);
+      doc.set(String(notesLoc) + "stringValue", "MPU only");
+      doc.set(String(heartrateLoc) + "[0]/doubleValue", 0);
+      doc.set(String(oximeterLoc) + "[0]/doubleValue", 0);
+      doc.set(String(bpUpLoc), 0);
+      doc.set(String(bpLowLoc), 0);
+
+      // if (Firebase.ready())
+      // {
+      //   Serial.println("token ready");
+      // }
+
+      // bool status = connectWifi();
+
+      // if (!status)
+      // {
+      //   wifiSituationalControlLoop();
+      //   Serial.println("connect to wifi fail");
+      // }
+
+      // Firebase.ready();
+
+      // // displayoled " uploading"
+      // display.clearDisplay();
+      // display.setCursor(0, 0);
+      // display.println(F("Uploading"));
+      // display.display();
+
+      // Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw());
+
+      bool status = uploadActivity();
+      if (!status)
+      {
+        // uploadSituationalControlLoop();
+        Serial.println("fail upload");
+        doc.clear();
+      }
+      delay(100);
+      if (exitLoop)
+      {
+        exitLoop = false;
+        break;
+      }
+    }
   }
 
   delay(100);
@@ -1103,6 +1166,40 @@ void startActivity(uint32_t *startTimeMillis)
       }
     }
     hrAvg = 0;
+    if (StartStopBtn.state)
+    {
+      exitLoop = true;
+      StartStopBtn.state = false;
+      break;
+    }
+  }
+}
+
+void monitorMPU(uint32_t *startTimeMillis)
+{
+  Serial.println("running task");
+  StartStopBtn.state = false;
+  int jsonArrayCounter = 0;
+
+  warmUpMpu();
+
+  static uint32_t prev_ms = millis();
+
+  *startTimeMillis = millis();
+
+  recordTimeMillis(true);
+
+  while (jsonArrayCounter < 100000)
+  { // operational Loop
+  delay(10);
+    if (mpu.update())
+    {
+      recordMpu(jsonArrayCounter);
+      recordTemperature(jsonArrayCounter);
+      getTimeElapsed(startTimeMillis);
+      jsonArrayCounter++;
+    }
+
     if (StartStopBtn.state)
     {
       exitLoop = true;
@@ -1449,6 +1546,7 @@ void wifiSituationalControlLoop()
   StartStopBtn.state = false;
   delay(100);
 }
+
 // interrupt call funcion
 void IRAM_ATTR StartStop()
 {
