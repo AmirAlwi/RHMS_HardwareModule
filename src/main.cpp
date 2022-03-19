@@ -77,6 +77,13 @@ static const uint32_t GPSBaud = 9600;
 
 RTC_DATA_ATTR int bootCount = 0;
 
+float pitch_buffer[6] = {0, 0, 0, 0, 0, 0};
+float roll_buffer[6] = {0, 0, 0, 0, 0, 0};
+float accX_buffer[6] = {0, 0, 0, 0, 0, 0};
+float accY_buffer[6] = {0, 0, 0, 0, 0, 0};
+float accZ_buffer[6] = {0, 0, 0, 0, 0, 0};
+float mag_buffer[6] = {0, 0, 0, 0, 0, 0};
+
 // initiate sensor & module
 BluetoothSerial SerialBT;
 Preferences storeSetting;
@@ -108,7 +115,7 @@ void getSSID_PASSWORD();
 void initiateFirestore();
 int menu();
 void mainMenuText(char *num, char *text, char *title);
-void recordMpu();
+void recordMpu(int buffer_position, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 int settingMenu();
@@ -120,7 +127,7 @@ void setupMlx();
 void startActivity(uint32_t *startTimeMillis);
 bool uploadActivity();
 void uploadSituationalControlLoop();
-void warmUpMpu();
+void warmUpMpu(float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
 void warmUpMax(int32_t length);
 void wifiSituationalControlLoop();
 void OxyBpm();
@@ -135,6 +142,7 @@ void recordTimeMillis(bool isstart);
 void recordGPS();
 void sensor_sleep();
 void sensor_wakeup();
+void record_position(int jsonArrayCounter, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
 
 void setup()
 {
@@ -282,7 +290,8 @@ int settingMenu()
       {
         mainMenuText("2.", "Account", "Set :");
       }
-      else if (current_sel == 3){
+      else if (current_sel == 3)
+      {
         mainMenuText("3.", "Exit", "Set :");
       }
 
@@ -439,7 +448,8 @@ void ConfigOperation()
   { // Account
     ConfigureUid();
   }
-  else if (setting_select == 3){
+  else if (setting_select == 3)
+  {
     exit;
   }
 }
@@ -698,14 +708,30 @@ void recordSpoHeartrate(int jsonArrayCounter)
   Serial.println(spo2, DEC);
 }
 
-void recordMpu()
+void recordMpu(int buffer_position, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg)
 {
-  Serial.println("Yaw, Pitch, Roll: added to doc");
-  Serial.print(mpu.getYaw(), 1);
-  Serial.print(", ");
-  Serial.print(mpu.getPitch(), 1);
-  Serial.print(", ");
-  Serial.println(mpu.getRoll(), 1);
+  float pitch, roll, accX, accY, accZ;
+
+  pitch = mpu.getPitch();
+  *pitchavg = *pitchavg - (pitch_buffer[buffer_position]-pitch)/6;
+  pitch_buffer[buffer_position] = pitch;
+
+  roll = mpu.getRoll();
+  *rollavg = *rollavg - (roll_buffer[buffer_position]-roll)/6;
+  roll_buffer[buffer_position] = roll;
+
+  accX = mpu.getAccX();
+  *accXavg = *accXavg - (accX_buffer[buffer_position]-accX)/6;
+  accX_buffer[buffer_position] = accX;
+
+  accY = mpu.getAccY();
+  *accYavg = *accYavg - (accY_buffer[buffer_position]-accY)/6;  
+  accY_buffer[buffer_position] = accY;
+
+  accZ = mpu.getAccZ();
+  *accZavg = *accZavg - (accZ_buffer[buffer_position]-accZ)/6;  
+  accZ_buffer[buffer_position] = accZ;
+
 }
 
 void recordTemperature(int jsonArrayCounter)
@@ -717,6 +743,20 @@ void recordTemperature(int jsonArrayCounter)
   Serial.print("Body = ");
   Serial.print(temperature);
   Serial.println("*C");
+}
+
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, bool* moving)
+{
+  // 1 move, 2 stand, 3 lay
+  //moving
+  if (accXavg > 0 || accYavg > 0 || accZavg > 0){ //proper value require
+    //log move
+  }else {
+    if ()
+  }
+
+
+  
 }
 
 unsigned long get_Epoch_Time()
@@ -748,24 +788,44 @@ void recordTimeMillis(bool isstart)
   }
 }
 
-void warmUpMpu()
+void warmUpMpu(float* pitch, float* roll, float* accX, float* accY, float* accZ)
 {
 
   static uint32_t prev_ms = millis();
 
   int x = 0;
-  while (x < 10)
+  while (x < 6)
   {
     if (mpu.update())
     {
       if (millis() > prev_ms + 100)
       {
-        log_d("recorded value %d and %d", mpu.getEulerX(), mpu.getYaw());
+        pitch_buffer[x] = mpu.getPitch();
+        *pitch += pitch_buffer[x];
+
+        roll_buffer[x] = mpu.getRoll();
+        *roll += roll_buffer[x];
+
+        accX_buffer[x] = mpu.getAccX();
+        *accX += accX_buffer[x];
+
+        accY_buffer[x] = mpu.getAccY();
+        *accY += accY_buffer[x];
+
+        accZ_buffer[x] = mpu.getAccZ();
+        *accZ += accZ_buffer[x];
         prev_ms = millis();
         x++;
       }
     }
   }
+
+  *pitch = *pitch/6;
+  *roll = *roll/6;
+  *accX = *accX/6;
+  *accY = *accY/6;
+  *accZ = *accZ/6;
+
 }
 
 void warmUpMax(int32_t length)
@@ -936,13 +996,13 @@ void selectOperation(int program_selection)
     uint32_t startTimeMillis;
     while (1)
     {
-      ++ bootCount;
+      ++bootCount;
       startActivity(&startTimeMillis);
 
       recordTimeMillis(false);
       recordGPS();
 
-       doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
+      doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
       doc.set(String(uidLoc) + "stringValue", UID);
       doc.set(String(notesLoc) + "stringValue", "routine monitoring");
       doc.set(String(bpUpLoc), 0);
@@ -1016,13 +1076,22 @@ void sensor_wakeup()
 void startActivity(uint32_t *startTimeMillis)
 {
 
+  float pitchavg = 0;
+  float rollavg = 0;
+  float accXavg = 0;
+  float accYavg = 0;
+  float accZavg = 0;
+  float magavg = 0;
+  bool moving = false;
+
   Serial.println("running task");
   StartStopBtn.state = false;
   bufferLength = 90;
   bool newActivity = true;
   int jsonArrayCounter = 0;
+  int buffer_position = 0;
 
-  warmUpMpu();
+  warmUpMpu(&pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
 
   static uint32_t prev_ms = millis();
 
@@ -1073,17 +1142,24 @@ void startActivity(uint32_t *startTimeMillis)
 
     if (mpu.update())
     {
-      if (millis() > prev_ms + 940)
+      recordMpu(buffer_position, &pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
+      if (++buffer_position > 5)
       {
-        prev_ms = millis();
-        recordMpu();
-        recordSpoHeartrate(jsonArrayCounter);
-        recordTemperature(jsonArrayCounter);
-        getTimeElapsed(startTimeMillis);
-
-        jsonArrayCounter++;
+        buffer_position = 0;
       }
     }
+
+    if (millis() > prev_ms + 940)
+    {
+      prev_ms = millis();
+
+      recordSpoHeartrate(jsonArrayCounter);
+      recordTemperature(jsonArrayCounter);
+      getTimeElapsed(startTimeMillis);
+      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, &moving);
+      jsonArrayCounter++;
+    }
+
     hrAvg = 0;
     if (StartStopBtn.state)
     {
