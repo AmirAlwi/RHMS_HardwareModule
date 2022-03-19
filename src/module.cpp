@@ -18,7 +18,9 @@
 #define heartrateLoc "fields/sensordata/mapValue/fields/heartrate/arrayValue/values/"
 #define oximeterLoc "fields/sensordata/mapValue/fields/oximeter/arrayValue/values/"
 #define temperatureLoc "fields/sensordata/mapValue/fields/temperature/arrayValue/values/"
+
 #define postureLoc "fields/sensordata/mapValue/fields/posture/arrayValue/values/"
+
 #define bpUpLoc "fields/sensordata/mapValue/fields/bloodpressure/mapValue/fields/upper/doubleValue"
 #define bpLowLoc "fields/sensordata/mapValue/fields/bloodpressure/mapValue/fields/lower/doubleValue"
 #define position_latitudeLoc "fields/sensordata/mapValue/fields/position/geoPointValue/latitude"

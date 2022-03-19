@@ -83,6 +83,7 @@ float accX_buffer[6] = {0, 0, 0, 0, 0, 0};
 float accY_buffer[6] = {0, 0, 0, 0, 0, 0};
 float accZ_buffer[6] = {0, 0, 0, 0, 0, 0};
 float mag_buffer[6] = {0, 0, 0, 0, 0, 0};
+float benchMag;
 
 // initiate sensor & module
 BluetoothSerial SerialBT;
@@ -142,7 +143,7 @@ void recordTimeMillis(bool isstart);
 void recordGPS();
 void sensor_sleep();
 void sensor_wakeup();
-void record_position(int jsonArrayCounter, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
+void record_position(int jsonArrayCounter, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float magavg, float* accZavg);
 
 void setup()
 {
@@ -745,17 +746,23 @@ void recordTemperature(int jsonArrayCounter)
   Serial.println("*C");
 }
 
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, bool* moving)
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, float magavg, bool* moving)
 {
   // 1 move, 2 stand, 3 lay
   //moving
   if (accXavg > 0 || accYavg > 0 || accZavg > 0){ //proper value require
     //log move
   }else {
-    if ()
+    if ((pitchavg >0 && pitchavg <0) || (pitchavg >0 && pitchavg <0)){
+      if(magavg > benchMag -60){
+        //sit
+      } else{
+        //stand
+      }
+    } else if ((rollavg >0 && rollavg <0) || (rollavg >0 && rollavg <0)){
+      //lay
+    }
   }
-
-
   
 }
 
@@ -1156,7 +1163,7 @@ void startActivity(uint32_t *startTimeMillis)
       recordSpoHeartrate(jsonArrayCounter);
       recordTemperature(jsonArrayCounter);
       getTimeElapsed(startTimeMillis);
-      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, &moving);
+      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, magavg, &moving);
       jsonArrayCounter++;
     }
 
