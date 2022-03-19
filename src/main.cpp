@@ -54,6 +54,8 @@ String documentPath = "activity";
 Button StartStopBtn = {35, false};
 Button NextBtn = {34, false};
 
+RTC_DATA_ATTR int bootCount = 0;
+
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 28800; //+8 hour
 const int daylightOffset_sec = 0;
@@ -712,7 +714,7 @@ void recordSpoHeartrate(int jsonArrayCounter)
 
 void recordMpu(int jsonArrayCounter)
 {
-  Serial.println("Yaw, Pitch, Roll: added to doc");
+  Serial.println(String(jsonArrayCounter) + " Yaw, Pitch, Roll: added to doc");
   Serial.print(mpu.getYaw(), 1);
   Serial.print(", ");
   Serial.print(mpu.getPitch(), 1);
@@ -1023,6 +1025,7 @@ void selectOperation(int program_selection)
   }
   else if (program_selection == 6)
   {
+    ++bootCount;
     uint32_t startTestTimeMillis;
     while (1)
     {
@@ -1030,7 +1033,7 @@ void selectOperation(int program_selection)
 
       recordTimeMillis(false);
 
-      doc.set(String(titleLoc) + "stringValue", "Dat Gathering");
+      doc.set(String(titleLoc) + "stringValue", "Dat Gathering " + String(bootCount));
       doc.set(String(uidLoc) + "stringValue", UID);
       doc.set(String(notesLoc) + "stringValue", "MPU only");
       doc.set(String(heartrateLoc) + "[0]/doubleValue", 0);
@@ -1038,36 +1041,29 @@ void selectOperation(int program_selection)
       doc.set(String(bpUpLoc), 0);
       doc.set(String(bpLowLoc), 0);
 
-      // if (Firebase.ready())
-      // {
-      //   Serial.println("token ready");
-      // }
+      bool status = connectWifi();
 
-      // bool status = connectWifi();
-
-      // if (!status)
-      // {
-      //   wifiSituationalControlLoop();
-      //   Serial.println("connect to wifi fail");
-      // }
-
-      // Firebase.ready();
-
-      // // displayoled " uploading"
-      // display.clearDisplay();
-      // display.setCursor(0, 0);
-      // display.println(F("Uploading"));
-      // display.display();
-
-      // Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw());
-
-      bool status = uploadActivity();
       if (!status)
       {
-        // uploadSituationalControlLoop();
-        Serial.println("fail upload");
-        doc.clear();
+        wifiSituationalControlLoop();
+        Serial.println("connect to wifi fail");
       }
+
+      // displayoled " uploading"
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(F("Uploading"));
+      display.display();
+
+      if (Firebase.ready())
+      {
+        Serial.println("token ready");
+      }
+
+      Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), doc.raw());
+      Serial.println("uploaded");
+      doc.clear();
+
       delay(100);
       if (exitLoop)
       {
@@ -1191,7 +1187,7 @@ void monitorMPU(uint32_t *startTimeMillis)
 
   while (jsonArrayCounter < 100000)
   { // operational Loop
-  delay(10);
+    delay(10);
     if (mpu.update())
     {
       recordMpu(jsonArrayCounter);
