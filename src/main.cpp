@@ -75,6 +75,8 @@ bool exitLoop = false;
 static const int RXPin = 19, TXPin = 18;
 static const uint32_t GPSBaud = 9600;
 
+RTC_DATA_ATTR int bootCount = 0;
+
 // initiate sensor & module
 BluetoothSerial SerialBT;
 Preferences storeSetting;
@@ -934,12 +936,13 @@ void selectOperation(int program_selection)
     uint32_t startTimeMillis;
     while (1)
     {
+      ++ bootCount;
       startActivity(&startTimeMillis);
 
       recordTimeMillis(false);
       recordGPS();
 
-      doc.set(String(titleLoc) + "stringValue", "Activity");
+       doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
       doc.set(String(uidLoc) + "stringValue", UID);
       doc.set(String(notesLoc) + "stringValue", "routine monitoring");
       doc.set(String(bpUpLoc), 0);
@@ -1012,6 +1015,7 @@ void sensor_wakeup()
 
 void startActivity(uint32_t *startTimeMillis)
 {
+
   Serial.println("running task");
   StartStopBtn.state = false;
   bufferLength = 90;
