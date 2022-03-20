@@ -1,18 +1,16 @@
-#include "module.cpp"
 #include <Arduino.h>
-#include <Wire.h>
-#include <WiFi.h>
+#include "module.cpp"
+
 #include <SPI.h>
 #include "time.h"
-#include <Preferences.h>
-#include "BluetoothSerial.h"
-#include <Adafruit_GFX.h>
-#include "Adafruit_Sensor.h"
+#include <Preferences.h> 
+
+#include <TinyGPSPlus.h> //gps uart
 #include <SoftwareSerial.h>
 
-#include <TinyGPSPlus.h> //gps
-
 #include <Adafruit_SSD1306.h> //oled
+#include <Adafruit_GFX.h>
+#include "Adafruit_Sensor.h"
 
 #include "Adafruit_MLX90614.h" //temperature
 
@@ -24,12 +22,20 @@
 
 #include "MAX17043.h" //fuel gauge
 
-#include <Firebase_ESP_Client.h>
+#include <Firebase_ESP_Client.h> //firebase
 #include <addons/TokenHelper.h>
+#define API_KEY "AIzaSyDGj1Fouh114V3w65thJrYYNigxP1KjbMQ"
+#define FIREBASE_PROJECT_ID "isdp-testdb"
+#define USER_EMAIL "isdp_esp_default_acc@isdp6.dont.change"
+#define USER_PASSWORD "!adUINsa*(76jka^k12"
 
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
+#include <Wire.h>
+#define SDA2 21
+#define SCL2 22
+
+#include <WiFi.h>
+#include "BluetoothSerial.h"
+#define BtDevice "How'rU_HRMS"
 
 struct Button
 {
@@ -37,15 +43,7 @@ struct Button
   bool state;
 };
 
-#define API_KEY "AIzaSyDGj1Fouh114V3w65thJrYYNigxP1KjbMQ"
-#define FIREBASE_PROJECT_ID "isdp-testdb"
-#define USER_EMAIL "isdp_esp_default_acc@isdp6.dont.change"
-#define USER_PASSWORD "!adUINsa*(76jka^k12"
-
-#define BtDevice "How'rU_HRMS"
-#define SDA2 21
-#define SCL2 22
-
+//global var
 String WIFI_SSID = "";
 String WIFI_PASSWORD = "";
 String UID = "";
@@ -61,7 +59,6 @@ unsigned long timeElapsed;
 
 uint32_t irBuffer[90];
 uint32_t redBuffer[90];
-
 int32_t bufferLength;
 int32_t spo2;
 int8_t validSPO2;
@@ -85,26 +82,36 @@ float accZ_buffer[6] = {0, 0, 0, 0, 0, 0};
 float mag_buffer[6] = {0, 0, 0, 0, 0, 0};
 float benchMag;
 
-// initiate sensor & module
+// sensor & module
 BluetoothSerial SerialBT;
 Preferences storeSetting;
-MAX17043 FuelGauge;
+
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
-MAX30105 particleSensor;
-MPU9250 mpu;
 Adafruit_MLX90614 mlx;
+MAX30105 particleSensor;
+MAX17043 FuelGauge;
+MPU9250 mpu;
+
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 FirebaseJson doc;
-TinyGPSPlus gps;
+
 SoftwareSerial ss(RXPin, TXPin);
+TinyGPSPlus gps;
 
 // function prototype
 void IRAM_ATTR Next();
 void IRAM_ATTR StartStop();
+
+int menu();
+int settingMenu();
 void batteryMenu();
 void batteryMenuText(char *text1);
+void settingMenuText(char *text1, char *text2);
+void realTimeText(int c1, int c2, char *text1);
+void mainMenuText(char *num, char *text, char *title);
+
 void configureMenuButton();
 void configureOled();
 void configureFuelGauge();
@@ -113,37 +120,38 @@ void ConfigOperation();
 void ConfigureUid();
 bool connectWifi();
 void getSSID_PASSWORD();
-void initiateFirestore();
-int menu();
-void mainMenuText(char *num, char *text, char *title);
-void recordMpu(int buffer_position, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
-void recordSpoHeartrate(int jsonArrayCounter);
-void recordTemperature(int jsonArrayCounter);
-int settingMenu();
-void selectOperation(int program_selection);
-void settingMenuText(char *text1, char *text2);
+
 void setupMax30102();
 void setupMpu();
 void setupMlx();
-void startActivity(uint32_t *startTimeMillis);
-bool uploadActivity();
-void uploadSituationalControlLoop();
-void warmUpMpu(float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg);
-void warmUpMax(int32_t length);
-void wifiSituationalControlLoop();
-void OxyBpm();
-void realTimeDisplay();
-void realTimeText(int c1, int c2, char *text1);
-void initialDisp(char *ini);
-void warmUpGPS();
 void setupGPS();
-unsigned long get_Epoch_Time();
+void initialDisp(char *ini);
+
+void initiateFirestore();
+void wifiSituationalControlLoop();
+void uploadSituationalControlLoop();
+bool uploadActivity();
+void selectOperation(int program_selection);
+void startActivity(uint32_t *startTimeMillis);
 void getTimeElapsed(uint32_t *startTimeMillis);
-void recordTimeMillis(bool isstart);
+
 void recordGPS();
+void recordTimeMillis(bool isstart);
+void recordSpoHeartrate(int jsonArrayCounter);
+void recordTemperature(int jsonArrayCounter);
+void recordMpu(int buffer_position, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg);
+void record_position(int jsonArrayCounter, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float magavg, float *accZavg);
+void warmUpGPS();
+void warmUpMax(int32_t length);
+void warmUpMpu(float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg);
+
+unsigned long get_Epoch_Time();
+void realTimeDisplay();
+void OxyBpm();
+
 void sensor_sleep();
 void sensor_wakeup();
-void record_position(int jsonArrayCounter, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float magavg, float* accZavg);
+//****
 
 void setup()
 {
@@ -196,372 +204,296 @@ void loop()
 }
 
 //####################################################################################################################//
-// menu selection display
-void initialDisp(char *ini)
-{
-  display.clearDisplay();
-  display.setCursor(0, 15);
-  display.println(F(ini));
-  display.display();
-}
 
-int menu()
+void selectOperation(int program_selection)
 {
-  Serial.println("Menu GO");
-  // selection number, use to return selection value
-  int current_sel = 1;
-
-  // print for the first time, change display to oled
-  mainMenuText("1.", "RTM Rec.", "Menu :");
-  // while not click ok button (StartStop)
-  while (!StartStopBtn.state)
+  if (program_selection == 1)
   {
-
-    // shift selection when Next button detect change state
-
-    if (NextBtn.state)
+    uint32_t startTimeMillis;
+    while (1)
     {
-      Serial.println(NextBtn.state);
-      delay(100);
-      NextBtn.state = false;
-      current_sel++;
+      ++bootCount;
+      startActivity(&startTimeMillis);
 
-      // change current selection
-      if (current_sel == 6)
+      recordTimeMillis(false);
+      recordGPS();
+
+      doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
+      doc.set(String(uidLoc) + "stringValue", UID);
+      doc.set(String(notesLoc) + "stringValue", "routine monitoring");
+      doc.set(String(bpUpLoc), 0);
+      doc.set(String(bpLowLoc), 0);
+      // Serial.print("time elapsed : ");
+      // Serial.println(millis() - startTimeMillis);
+
+      if (Firebase.ready())
       {
-        mainMenuText("1.", "RTM Rec.", "Menu :");
-        current_sel = 1;
-      }
-      else if (current_sel == 2)
-      {
-        mainMenuText("2.", "View Only", "Menu :");
-      }
-      else if (current_sel == 3)
-      {
-        mainMenuText("3.", "Setting", "Menu :");
-      }
-      else if (current_sel == 4)
-      {
-        mainMenuText("4.", "Sleep", "Menu :");
-      }
-      else if (current_sel == 5)
-      {
-        mainMenuText("5.", "Battery", "Menu :");
+        Serial.println("token ready");
       }
 
-      // reset next button state
-      NextBtn.state = false;
+      bool status = uploadActivity();
+      if (!status)
+      {
+        // uploadSituationalControlLoop();
+        Serial.println("fail upload");
+        doc.clear();
+      }
+
+      if (exitLoop)
+      {
+        exitLoop = false;
+        break;
+      }
     }
-    delay(100);
-    NextBtn.state = false;
-    delay(200);
   }
-  // reset startstop button state after operation is selected
-  StartStopBtn.state = false;
+  else if (program_selection == 2)
+  {
+    realTimeDisplay();
+  }
+  else if (program_selection == 3)
+  {
+    ConfigOperation();
+    StartStopBtn.state = false;
+  }
+  else if (program_selection == 4)
+  {
+    delay(1000);
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println(F("Sleeping"));
+    display.display();
+    sensor_sleep();
+    esp_light_sleep_start();
+    sensor_wakeup();
+  }
+  else if (program_selection == 5)
+  {
+    batteryMenu();
+  }
+
   delay(100);
-
-  // return selection
-  return current_sel;
-}
-
-int settingMenu()
-{
-  // selection number, use to return selection value
-  int current_sel = 1;
-
-  // print for the first time, change display to oled
-  mainMenuText("1.", "WIFI", "Set :");
-
-  // while not click ok button (StartStop)
-  while (!StartStopBtn.state)
-  {
-
-    // shift selection when Next button detect change state
-    if (NextBtn.state)
-    {
-      current_sel++;
-
-      // change current selection
-      if (current_sel == 4)
-      {
-        mainMenuText("1.", "WiFI", "Set :");
-        current_sel = 1;
-      }
-      else if (current_sel == 2)
-      {
-        mainMenuText("2.", "Account", "Set :");
-      }
-      else if (current_sel == 3)
-      {
-        mainMenuText("3.", "Exit", "Set :");
-      }
-
-      // reset next button state
-      NextBtn.state = false;
-    }
-
-    delay(100);
-  }
-  // reset startstop button state after operation is selected
   StartStopBtn.state = false;
-  delay(100);
-
-  // return selection
-  return current_sel;
 }
 
-void ConfigureWifi()
+void startActivity(uint32_t *startTimeMillis)
 {
 
-  settingMenuText("WiFi", "Setting");
-  delay(300);
-  // bluetooth start
-  SerialBT.begin(BtDevice);
+  float pitchavg = 0;
+  float rollavg = 0;
+  float accXavg = 0;
+  float accYavg = 0;
+  float accZavg = 0;
+  float magavg = 0;
+  bool moving = false;
 
-  settingMenuText("Receiving:", "SSID");
-  static uint32_t prev_ms = millis();
-  bool blinki = false;
-  while (1)
-  {
-    if (millis() > prev_ms + 500)
-    {
-      prev_ms = millis();
-      if (blinki)
-      {
-        settingMenuText("Receiving:", "SSID");
-        blinki = !blinki;
-      }
-      else
-      {
-        settingMenuText("", "");
-        blinki = !blinki;
-      }
-    }
+  Serial.println("running task");
+  StartStopBtn.state = false;
+  bufferLength = 90;
+  bool newActivity = true;
+  int jsonArrayCounter = 0;
+  int buffer_position = 0;
 
-    if (SerialBT.available())
-      break;
-  }
-
-  storeSetting.begin("rhms-app", false);
-
-  WIFI_SSID = SerialBT.readString();
-  WIFI_SSID.remove(WIFI_SSID.length() - 2, 2);
-  storeSetting.putString("WIFI_SSID", WIFI_SSID);
-  delay(500);
-
-  prev_ms = millis();
-  blinki = false;
-  while (1)
-  {
-    if (millis() > prev_ms + 500)
-    {
-      prev_ms = millis();
-      if (blinki)
-      {
-        settingMenuText("Receiving:", "Password");
-        blinki = !blinki;
-      }
-      else
-      {
-        settingMenuText("", "");
-        blinki = !blinki;
-      }
-    }
-
-    if (SerialBT.available())
-      break;
-  }
-
-  WIFI_PASSWORD = SerialBT.readString();
-  WIFI_PASSWORD.remove(WIFI_PASSWORD.length() - 2, 2);
-  storeSetting.putString("WIFI_PASSWORD", WIFI_PASSWORD);
-
-  storeSetting.end();
-
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Setup");
-  display.setCursor(15, 20);
-  display.println("complete");
-  display.display();
-
-  SerialBT.end();
-  delay(500);
-}
-
-void ConfigureUid()
-{
-  settingMenuText("User ID", "Setting");
-  delay(300);
-
-  SerialBT.begin(BtDevice);
+  warmUpMpu(&pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
 
   static uint32_t prev_ms = millis();
-  bool blinki = false;
-  while (!SerialBT.available())
-  {
-    if (millis() > prev_ms + 500)
+
+  warmUpMax(bufferLength);
+
+  *startTimeMillis = millis();
+
+  recordTimeMillis(true);
+
+  while (jsonArrayCounter < 1800)
+  { // operational Loop
+
+    for (byte i = 25; i < 90; i++)
+    {
+      redBuffer[i - 25] = redBuffer[i];
+      irBuffer[i - 25] = irBuffer[i];
+    }
+
+    for (byte i = 70; i < 90; i++)
+    {
+      if (newActivity)
+      {
+        heartRateBuffer[i - 70] = heartRate;
+        hrAvg += heartRate - 10;
+        newActivity = false;
+      }
+      else if (heartRate > 0)
+      {
+        heartRateBuffer[i - 70] = heartRateBuffer[i - 69];
+        hrAvg += heartRateBuffer[i - 69];
+      }
+
+      while (particleSensor.available() == false)
+        particleSensor.check();
+
+      redBuffer[i] = particleSensor.getRed();
+      irBuffer[i] = particleSensor.getIR();
+      particleSensor.nextSample();
+    }
+
+    maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+
+    if (heartRate > 0)
+    {
+      heartRateBuffer[19] = heartRate - 10;
+      hrAvg += heartRate;
+    }
+
+    if (mpu.update())
+    {
+      recordMpu(buffer_position, &pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
+      if (++buffer_position > 5)
+      {
+        buffer_position = 0;
+      }
+    }
+
+    if (millis() > prev_ms + 940)
     {
       prev_ms = millis();
-      if (blinki)
-      {
-        settingMenuText("Receiving:", "User ID");
-        blinki = !blinki;
-      }
-      else
-      {
-        settingMenuText("", "");
-        blinki = !blinki;
-      }
+
+      recordSpoHeartrate(jsonArrayCounter);
+      recordTemperature(jsonArrayCounter);
+      getTimeElapsed(startTimeMillis);
+      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, magavg, &moving);
+      jsonArrayCounter++;
     }
-  }
 
-  storeSetting.begin("rhms-app", false);
-
-  UID = SerialBT.readString();
-  UID.remove(UID.length() - 2, 2);
-  storeSetting.putString("UID", UID);
-
-  storeSetting.end();
-
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Setup");
-  display.setCursor(0, 20);
-  display.println("complete");
-  display.display();
-
-  SerialBT.end();
-  delay(500);
-}
-
-void ConfigOperation()
-{
-  int setting_select = settingMenu();
-
-  if (setting_select == 1)
-  { // WiFi
-    ConfigureWifi();
-
-    // operation 2
-  }
-  else if (setting_select == 2)
-  { // Account
-    ConfigureUid();
-  }
-  else if (setting_select == 3)
-  {
-    exit;
-  }
-}
-
-void mainMenuText(char *num, char *text, char *title)
-{
-  display.clearDisplay();
-
-  display.setCursor(0, 0);
-  display.println(F(title));
-  display.setCursor(50, 20);
-  display.println(F(num));
-
-  display.setCursor(0, 45);
-  display.println(F(text));
-  display.display();
-}
-
-void settingMenuText(char *text1, char *text2)
-{
-  display.clearDisplay();
-
-  display.setCursor(5, 0);
-  display.setTextSize(1);
-  display.println(F("[Setting]"));
-  display.setTextSize(2);
-  display.setCursor(0, 20);
-  display.println(F(text1));
-
-  display.setCursor(0, 45);
-  display.println(F(text2));
-  display.display();
-}
-
-void batteryMenu()
-{
-  StartStopBtn.state = false;
-  // selection number, use to return selection value
-  int current_sel = 1;
-
-  batteryMenuText("Percentage");
-  display.setTextSize(2);
-  display.print(FuelGauge.getSoC());
-  display.print(" %");
-  display.display();
-
-  // while not click ok button (StartStop)
-  while (!StartStopBtn.state)
-  {
-
-    // shift selection when Next button detect change state
-    if (NextBtn.state)
+    hrAvg = 0;
+    if (StartStopBtn.state)
     {
-      current_sel++;
+      exitLoop = true;
+      StartStopBtn.state = false;
+      break;
+    }
+  }
+}
 
-      // change current selection
-      if (current_sel == 4)
-      {
-        batteryMenuText("Percentage");
-        display.print(FuelGauge.getSoC());
-        display.print(" %");
-        display.display();
-        current_sel = 1;
-      }
-      else if (current_sel == 2)
-      {
-        batteryMenuText("Remaining");
-      }
-      else if (current_sel == 3)
-      {
-        batteryMenuText("Voltage");
-        display.print(FuelGauge.getVCell());
-        display.print(" V");
-        display.display();
-      }
+void OxyBpm()
+{
+  static uint32_t prev_ms = millis();
+  bufferLength = 100;
+  display.clearDisplay();
+  realTimeText(0, 0, "Calculating");
 
-      // reset next button state
-      NextBtn.state = false;
+  // calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
+  for (byte i = 0; i < bufferLength; i++)
+  {
+    while (particleSensor.available() == false) // do we have new data?
+      particleSensor.check();                   // Check the sensor for new data
+
+    redBuffer[i] = particleSensor.getRed();
+    irBuffer[i] = particleSensor.getIR();
+    particleSensor.nextSample(); // We're finished with this sample so move to next sample
+
+    Serial.print(F("red="));
+    Serial.print(redBuffer[i], DEC);
+    Serial.print(F(", ir="));
+    Serial.println(irBuffer[i], DEC);
+  }
+  maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+
+  // Continuously taking samples from MAX30102.  Heart rate and SpO2 are calculated every 1 second
+  while (1)
+  {
+    // dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
+    for (byte i = 25; i < 100; i++)
+    {
+
+      redBuffer[i - 25] = redBuffer[i];
+      irBuffer[i - 25] = irBuffer[i];
     }
 
-    delay(10);
+    // take 25 sets of samples before calculating the heart rate.
+    for (byte i = 75; i < 100; i++)
+    {
+      while (particleSensor.available() == false) // do we have new data?
+        particleSensor.check();                   // Check the sensor for new data
+
+      redBuffer[i] = particleSensor.getRed();
+      irBuffer[i] = particleSensor.getIR();
+      particleSensor.nextSample(); // We're finished with this sample so move to next sample
+
+      // send samples and calculation result to terminal program through UART
+    }
+
+    // After gathering 25 new samples recalculate HR and SP02
+    maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+    if (millis() > prev_ms + 1000)
+    {
+      prev_ms = millis();
+      display.clearDisplay();
+
+      realTimeText(0, 0, "BPM: ");
+      display.setCursor(60, 0);
+      display.print(heartRate);
+
+      realTimeText(0, 25, "SPO2: ");
+      display.setCursor(60, 25);
+      display.print(spo2);
+      realTimeText(0, 45, "'C: ");
+      display.setCursor(60, 45);
+      display.print(mlx.readObjectTempC());
+      display.display();
+    }
+
+    if (StartStopBtn.state)
+    {
+      exitLoop = true;
+      break;
+    }
   }
-  // reset startstop button state after operation is selected
-  StartStopBtn.state = false;
-  delay(100);
 }
 
-void batteryMenuText(char *text1)
+void realTimeDisplay()
 {
   display.clearDisplay();
-  // Battery Menu
-  display.setCursor(5, 0);
-  display.setTextSize(1);
-  display.println(F("[Battery]"));
-  display.setTextSize(2);
-
-  display.setCursor(0, 20);
-  display.println(F(text1));
-
-  display.display();
+  realTimeText(0, 0, "Real Time Data");
+  while (!exitLoop)
+  {
+    display.clearDisplay();
+    OxyBpm();
+  }
+  exitLoop = false;
+  StartStopBtn.state = false;
 }
 
-void configureMenuButton()
+// component setup
+void initiateFirestore()
 {
-  // Set gpio
-  pinMode(StartStopBtn.PIN, INPUT_PULLDOWN);
-  pinMode(NextBtn.PIN, INPUT_PULLDOWN);
+  // displayoled "setting up <newline> firestore"
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Setting up"));
+  display.setCursor(0, 25);
+  display.println(F("firestore"));
+  display.display();
+  delay(300);
 
-  // attach pin to intterupt function
-  attachInterrupt(StartStopBtn.PIN, StartStop, FALLING);
-  attachInterrupt(NextBtn.PIN, Next, FALLING);
+  bool status = connectWifi();
+  if (!status)
+  {
+    wifiSituationalControlLoop();
+  }
+
+  config.api_key = API_KEY;
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+
+  // displayoled "Token <newline> retrieved"
+  display.clearDisplay();
+  // display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Token"));
+  display.setCursor(0, 25);
+  display.println(F("Retrieved"));
+  display.display();
 }
 
 void configureOled()
@@ -694,110 +626,76 @@ void setupMlx()
   }
 }
 
-void recordSpoHeartrate(int jsonArrayCounter)
+void configureMenuButton()
 {
+  // Set gpio
+  pinMode(StartStopBtn.PIN, INPUT_PULLDOWN);
+  pinMode(NextBtn.PIN, INPUT_PULLDOWN);
 
-  int32_t averageHeartRate = hrAvg / 20;
-
-  doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
-  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
-
-  Serial.print(F(", Avg HR="));
-  Serial.print(averageHeartRate, DEC);
-
-  Serial.print(F(", SPO2="));
-  Serial.println(spo2, DEC);
+  // attach pin to intterupt function
+  attachInterrupt(StartStopBtn.PIN, StartStop, FALLING);
+  attachInterrupt(NextBtn.PIN, Next, FALLING);
 }
 
-void recordMpu(int buffer_position, float* pitchavg, float* rollavg, float* accXavg, float* accYavg, float* accZavg)
+// sensor warmup
+void warmUpGPS()
 {
-  float pitch, roll, accX, accY, accZ;
-
-  pitch = mpu.getPitch();
-  *pitchavg = *pitchavg - (pitch_buffer[buffer_position]-pitch)/6;
-  pitch_buffer[buffer_position] = pitch;
-
-  roll = mpu.getRoll();
-  *rollavg = *rollavg - (roll_buffer[buffer_position]-roll)/6;
-  roll_buffer[buffer_position] = roll;
-
-  accX = mpu.getAccX();
-  *accXavg = *accXavg - (accX_buffer[buffer_position]-accX)/6;
-  accX_buffer[buffer_position] = accX;
-
-  accY = mpu.getAccY();
-  *accYavg = *accYavg - (accY_buffer[buffer_position]-accY)/6;  
-  accY_buffer[buffer_position] = accY;
-
-  accZ = mpu.getAccZ();
-  *accZavg = *accZavg - (accZ_buffer[buffer_position]-accZ)/6;  
-  accZ_buffer[buffer_position] = accZ;
-
-}
-
-void recordTemperature(int jsonArrayCounter)
-{
-  float temperature = mlx.readObjectTempC();
-
-  doc.set(String(temperatureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", temperature);
-
-  Serial.print("Body = ");
-  Serial.print(temperature);
-  Serial.println("*C");
-}
-
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, float magavg, bool* moving)
-{
-  // 1 move, 2 stand, 3 lay
-  //moving
-  if (accXavg > 0 || accYavg > 0 || accZavg > 0){ //proper value require
-    //log move
-  }else {
-    if ((pitchavg >0 && pitchavg <0) || (pitchavg >0 && pitchavg <0)){
-      if(magavg > benchMag -60){
-        //sit
-      } else{
-        //stand
-      }
-    } else if ((rollavg >0 && rollavg <0) || (rollavg >0 && rollavg <0)){
-      //lay
-    }
-  }
-  
-}
-
-unsigned long get_Epoch_Time()
-{
-  time_t now;
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo))
+  Serial.print(F("Location: "));
+  if (gps.location.isValid())
   {
-    // Serial.println("Failed to obtain time");
-    return (0);
-  }
-  time(&now);
-  return now;
-}
-
-void recordTimeMillis(bool isstart)
-{
-  unsigned long Epoch_Time = get_Epoch_Time();
-  String time_s = String(Epoch_Time) + "000";
-
-  if (isstart)
-  {
-    doc.set(String(dateLoc) + "doubleValue", time_s);
-    doc.set(String(starttimeLoc) + "doubleValue", time_s);
+    double lat = (gps.location.lat());
+    Serial.print(lat);
+    Serial.print(F(","));
+    double lng = (gps.location.lng());
+    Serial.print(lng);
   }
   else
   {
-    doc.set(String(endtimeLoc) + "doubleValue", time_s);
+    Serial.print(F("INVALID"));
   }
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10)
+      Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
 }
 
-void warmUpMpu(float* pitch, float* roll, float* accX, float* accY, float* accZ)
+void warmUpMpu(float *pitch, float *roll, float *accX, float *accY, float *accZ)
 {
-
   static uint32_t prev_ms = millis();
 
   int x = 0;
@@ -827,17 +725,15 @@ void warmUpMpu(float* pitch, float* roll, float* accX, float* accY, float* accZ)
     }
   }
 
-  *pitch = *pitch/6;
-  *roll = *roll/6;
-  *accX = *accX/6;
-  *accY = *accY/6;
-  *accZ = *accZ/6;
-
+  *pitch = *pitch / 6;
+  *roll = *roll / 6;
+  *accX = *accX / 6;
+  *accY = *accY / 6;
+  *accZ = *accZ / 6;
 }
 
 void warmUpMax(int32_t length)
 {
-
   for (byte i = 0; i < length; i++)
   {
     while (particleSensor.available() == false)
@@ -854,39 +750,150 @@ void warmUpMax(int32_t length)
   maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
 }
 
-void initiateFirestore()
+//data logging
+void recordGPS()
 {
-
-  // displayoled "setting up <newline> firestore"
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setCursor(0, 0);
-  display.println(F("Setting up"));
-  display.setCursor(0, 25);
-  display.println(F("firestore"));
-  display.display();
-  delay(300);
-
-  bool status = connectWifi();
-  if (!status)
+  double lat;
+  double lng;
+  bool done = false;
+  for (int i = 0; i < 20; i++)
   {
-    wifiSituationalControlLoop();
+    delay(50);
+    while (ss.available() > 0)
+      if (gps.encode(ss.read()))
+      {
+        if (gps.location.isValid())
+        {
+          lat = gps.location.lat();
+          Serial.print(lat);
+          Serial.print(F(","));
+          lng = gps.location.lng();
+          Serial.println(lng);
+          done = true;
+        }
+        else
+        {
+          Serial.print(F("INVALID"));
+        }
+      }
+      else if (millis() > 5000 && gps.charsProcessed() < 10)
+      {
+        Serial.println(F("No GPS detected: check wiring."));
+        while (true)
+          ;
+      }
+
+    if (done)
+    {
+      break;
+    }
   }
 
-  config.api_key = API_KEY;
-  auth.user.email = USER_EMAIL;
-  auth.user.password = USER_PASSWORD;
-  config.token_status_callback = tokenStatusCallback;
-  Firebase.begin(&config, &auth);
+  doc.set(String(position_latitudeLoc), lat);
+  doc.set(String(position_logitudeLoc), lng);
+}
 
-  // displayoled "Token <newline> retrieved"
-  display.clearDisplay();
-  // display.setTextSize(2);
-  display.setCursor(0, 0);
-  display.println(F("Token"));
-  display.setCursor(0, 25);
-  display.println(F("Retrieved"));
-  display.display();
+void recordSpoHeartrate(int jsonArrayCounter)
+{
+  int32_t averageHeartRate = hrAvg / 20;
+
+  doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
+  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
+
+  Serial.print(F(", Avg HR="));
+  Serial.print(averageHeartRate, DEC);
+
+  Serial.print(F(", SPO2="));
+  Serial.println(spo2, DEC);
+}
+
+void recordTemperature(int jsonArrayCounter)
+{
+  float temperature = mlx.readObjectTempC();
+
+  doc.set(String(temperatureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", temperature);
+
+  Serial.print("Body = ");
+  Serial.print(temperature);
+  Serial.println("*C");
+}
+
+void recordMpu(int buffer_position, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg)
+{
+  float pitch, roll, accX, accY, accZ;
+
+  pitch = mpu.getPitch();
+  *pitchavg = *pitchavg - (pitch_buffer[buffer_position] - pitch) / 6;
+  pitch_buffer[buffer_position] = pitch;
+
+  roll = mpu.getRoll();
+  *rollavg = *rollavg - (roll_buffer[buffer_position] - roll) / 6;
+  roll_buffer[buffer_position] = roll;
+
+  accX = mpu.getAccX();
+  *accXavg = *accXavg - (accX_buffer[buffer_position] - accX) / 6;
+  accX_buffer[buffer_position] = accX;
+
+  accY = mpu.getAccY();
+  *accYavg = *accYavg - (accY_buffer[buffer_position] - accY) / 6;
+  accY_buffer[buffer_position] = accY;
+
+  accZ = mpu.getAccZ();
+  *accZavg = *accZavg - (accZ_buffer[buffer_position] - accZ) / 6;
+  accZ_buffer[buffer_position] = accZ;
+}
+
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, float magavg, bool *moving)
+{
+  // 1 move, 2 stand, 3 lay
+  // moving
+  if (accXavg > 0 || accYavg > 0 || accZavg > 0)
+  { // proper value require
+    // log move
+  }
+  else
+  {
+    if ((pitchavg > 0 && pitchavg < 0) || (pitchavg > 0 && pitchavg < 0))
+    {
+      if (magavg > benchMag - 60)
+      {
+        // sit
+      }
+      else
+      {
+        // stand
+      }
+    }
+    else if ((rollavg > 0 && rollavg < 0) || (rollavg > 0 && rollavg < 0))
+    {
+      // lay
+    }
+  }
+}
+
+// utility function
+void IRAM_ATTR StartStop()
+{
+  StartStopBtn.state = true;
+}
+
+void IRAM_ATTR Next()
+{
+  NextBtn.state = true;
+}
+
+void sensor_sleep()
+{
+  display.dim(true);
+  particleSensor.shutDown();
+  mpu.sleep(true);
+}
+
+void sensor_wakeup()
+{
+  display.dim(false);
+  particleSensor.wakeUp();
+  mpu.sleep(false);
 }
 
 bool connectWifi()
@@ -940,6 +947,160 @@ void getSSID_PASSWORD()
   {
     ConfigureWifi();
   }
+}
+
+void recordTimeMillis(bool isstart)
+{
+  unsigned long Epoch_Time = get_Epoch_Time();
+  String time_s = String(Epoch_Time) + "000";
+
+  if (isstart)
+  {
+    doc.set(String(dateLoc) + "doubleValue", time_s);
+    doc.set(String(starttimeLoc) + "doubleValue", time_s);
+  }
+  else
+  {
+    doc.set(String(endtimeLoc) + "doubleValue", time_s);
+  }
+}
+
+unsigned long get_Epoch_Time()
+{
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo))
+  {
+    // Serial.println("Failed to obtain time");
+    return (0);
+  }
+  time(&now);
+  return now;
+}
+
+void ConfigureWifi()
+{
+
+  settingMenuText("WiFi", "Setting");
+  delay(300);
+  // bluetooth start
+  SerialBT.begin(BtDevice);
+
+  settingMenuText("Receiving:", "SSID");
+  static uint32_t prev_ms = millis();
+  bool blinki = false;
+  while (1)
+  {
+    if (millis() > prev_ms + 500)
+    {
+      prev_ms = millis();
+      if (blinki)
+      {
+        settingMenuText("Receiving:", "SSID");
+        blinki = !blinki;
+      }
+      else
+      {
+        settingMenuText("", "");
+        blinki = !blinki;
+      }
+    }
+
+    if (SerialBT.available())
+      break;
+  }
+
+  storeSetting.begin("rhms-app", false);
+
+  WIFI_SSID = SerialBT.readString();
+  WIFI_SSID.remove(WIFI_SSID.length() - 2, 2);
+  storeSetting.putString("WIFI_SSID", WIFI_SSID);
+  delay(500);
+
+  prev_ms = millis();
+  blinki = false;
+  while (1)
+  {
+    if (millis() > prev_ms + 500)
+    {
+      prev_ms = millis();
+      if (blinki)
+      {
+        settingMenuText("Receiving:", "Password");
+        blinki = !blinki;
+      }
+      else
+      {
+        settingMenuText("", "");
+        blinki = !blinki;
+      }
+    }
+
+    if (SerialBT.available())
+      break;
+  }
+
+  WIFI_PASSWORD = SerialBT.readString();
+  WIFI_PASSWORD.remove(WIFI_PASSWORD.length() - 2, 2);
+  storeSetting.putString("WIFI_PASSWORD", WIFI_PASSWORD);
+
+  storeSetting.end();
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Setup");
+  display.setCursor(15, 20);
+  display.println("complete");
+  display.display();
+
+  SerialBT.end();
+  delay(500);
+}
+
+void ConfigureUid()
+{
+  settingMenuText("User ID", "Setting");
+  delay(300);
+
+  SerialBT.begin(BtDevice);
+
+  static uint32_t prev_ms = millis();
+  bool blinki = false;
+  while (!SerialBT.available())
+  {
+    if (millis() > prev_ms + 500)
+    {
+      prev_ms = millis();
+      if (blinki)
+      {
+        settingMenuText("Receiving:", "User ID");
+        blinki = !blinki;
+      }
+      else
+      {
+        settingMenuText("", "");
+        blinki = !blinki;
+      }
+    }
+  }
+
+  storeSetting.begin("rhms-app", false);
+
+  UID = SerialBT.readString();
+  UID.remove(UID.length() - 2, 2);
+  storeSetting.putString("UID", UID);
+
+  storeSetting.end();
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Setup");
+  display.setCursor(0, 20);
+  display.println("complete");
+  display.display();
+
+  SerialBT.end();
+  delay(500);
 }
 
 bool uploadActivity()
@@ -996,187 +1157,6 @@ bool uploadActivity()
   return true;
 }
 
-void selectOperation(int program_selection)
-{
-  if (program_selection == 1)
-  {
-    uint32_t startTimeMillis;
-    while (1)
-    {
-      ++bootCount;
-      startActivity(&startTimeMillis);
-
-      recordTimeMillis(false);
-      recordGPS();
-
-      doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
-      doc.set(String(uidLoc) + "stringValue", UID);
-      doc.set(String(notesLoc) + "stringValue", "routine monitoring");
-      doc.set(String(bpUpLoc), 0);
-      doc.set(String(bpLowLoc), 0);
-      // Serial.print("time elapsed : ");
-      // Serial.println(millis() - startTimeMillis);
-
-      if (Firebase.ready())
-      {
-        Serial.println("token ready");
-      }
-
-      bool status = uploadActivity();
-      if (!status)
-      {
-        // uploadSituationalControlLoop();
-        Serial.println("fail upload");
-        doc.clear();
-      }
-
-      if (exitLoop)
-      {
-        exitLoop = false;
-        break;
-      }
-    }
-  }
-  else if (program_selection == 2)
-  {
-    realTimeDisplay();
-  }
-  else if (program_selection == 3)
-  {
-    ConfigOperation();
-    StartStopBtn.state = false;
-  }
-  else if (program_selection == 4)
-  {
-    delay(1000);
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println(F("Sleeping"));
-    display.display();
-    sensor_sleep();
-    esp_light_sleep_start();
-    sensor_wakeup();
-  }
-  else if (program_selection == 5)
-  {
-    batteryMenu();
-  }
-
-  delay(100);
-  StartStopBtn.state = false;
-}
-
-void sensor_sleep()
-{
-  display.dim(true);
-  particleSensor.shutDown();
-  mpu.sleep(true);
-}
-
-void sensor_wakeup()
-{
-  display.dim(false);
-  particleSensor.wakeUp();
-  mpu.sleep(false);
-}
-
-void startActivity(uint32_t *startTimeMillis)
-{
-
-  float pitchavg = 0;
-  float rollavg = 0;
-  float accXavg = 0;
-  float accYavg = 0;
-  float accZavg = 0;
-  float magavg = 0;
-  bool moving = false;
-
-  Serial.println("running task");
-  StartStopBtn.state = false;
-  bufferLength = 90;
-  bool newActivity = true;
-  int jsonArrayCounter = 0;
-  int buffer_position = 0;
-
-  warmUpMpu(&pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
-
-  static uint32_t prev_ms = millis();
-
-  warmUpMax(bufferLength);
-
-  *startTimeMillis = millis();
-
-  recordTimeMillis(true);
-
-  while (jsonArrayCounter < 1800)
-  { // operational Loop
-
-    for (byte i = 25; i < 90; i++)
-    {
-      redBuffer[i - 25] = redBuffer[i];
-      irBuffer[i - 25] = irBuffer[i];
-    }
-
-    for (byte i = 70; i < 90; i++)
-    {
-      if (newActivity)
-      {
-        heartRateBuffer[i - 70] = heartRate;
-        hrAvg += heartRate - 10;
-        newActivity = false;
-      }
-      else if (heartRate > 0)
-      {
-        heartRateBuffer[i - 70] = heartRateBuffer[i - 69];
-        hrAvg += heartRateBuffer[i - 69];
-      }
-
-      while (particleSensor.available() == false)
-        particleSensor.check();
-
-      redBuffer[i] = particleSensor.getRed();
-      irBuffer[i] = particleSensor.getIR();
-      particleSensor.nextSample();
-    }
-
-    maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-
-    if (heartRate > 0)
-    {
-      heartRateBuffer[19] = heartRate - 10;
-      hrAvg += heartRate;
-    }
-
-    if (mpu.update())
-    {
-      recordMpu(buffer_position, &pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
-      if (++buffer_position > 5)
-      {
-        buffer_position = 0;
-      }
-    }
-
-    if (millis() > prev_ms + 940)
-    {
-      prev_ms = millis();
-
-      recordSpoHeartrate(jsonArrayCounter);
-      recordTemperature(jsonArrayCounter);
-      getTimeElapsed(startTimeMillis);
-      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, magavg, &moving);
-      jsonArrayCounter++;
-    }
-
-    hrAvg = 0;
-    if (StartStopBtn.state)
-    {
-      exitLoop = true;
-      StartStopBtn.state = false;
-      break;
-    }
-  }
-}
-
 void getTimeElapsed(uint32_t *startTimeMillis)
 {
   timeElapsed = (millis() - *startTimeMillis);
@@ -1193,202 +1173,186 @@ void getTimeElapsed(uint32_t *startTimeMillis)
   display.display();
 }
 
-void OxyBpm()
+// menu list
+void batteryMenu()
 {
-  static uint32_t prev_ms = millis();
-  bufferLength = 100;
-  display.clearDisplay();
-  realTimeText(0, 0, "Calculating");
-
-  // calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
-  for (byte i = 0; i < bufferLength; i++)
-  {
-    while (particleSensor.available() == false) // do we have new data?
-      particleSensor.check();                   // Check the sensor for new data
-
-    redBuffer[i] = particleSensor.getRed();
-    irBuffer[i] = particleSensor.getIR();
-    particleSensor.nextSample(); // We're finished with this sample so move to next sample
-
-    Serial.print(F("red="));
-    Serial.print(redBuffer[i], DEC);
-    Serial.print(F(", ir="));
-    Serial.println(irBuffer[i], DEC);
-  }
-  maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-
-  // Continuously taking samples from MAX30102.  Heart rate and SpO2 are calculated every 1 second
-  while (1)
-  {
-    // dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
-    for (byte i = 25; i < 100; i++)
-    {
-
-      redBuffer[i - 25] = redBuffer[i];
-      irBuffer[i - 25] = irBuffer[i];
-    }
-
-    // take 25 sets of samples before calculating the heart rate.
-    for (byte i = 75; i < 100; i++)
-    {
-      while (particleSensor.available() == false) // do we have new data?
-        particleSensor.check();                   // Check the sensor for new data
-
-      redBuffer[i] = particleSensor.getRed();
-      irBuffer[i] = particleSensor.getIR();
-      particleSensor.nextSample(); // We're finished with this sample so move to next sample
-
-      // send samples and calculation result to terminal program through UART
-    }
-
-    // After gathering 25 new samples recalculate HR and SP02
-    maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-    if (millis() > prev_ms + 1000)
-    {
-      prev_ms = millis();
-      display.clearDisplay();
-
-      realTimeText(0, 0, "BPM: ");
-      display.setCursor(60, 0);
-      display.print(heartRate);
-
-      realTimeText(0, 25, "SPO2: ");
-      display.setCursor(60, 25);
-      display.print(spo2);
-      realTimeText(0, 45, "'C: ");
-      display.setCursor(60, 45);
-      display.print(mlx.readObjectTempC());
-      display.display();
-    }
-
-    if (StartStopBtn.state)
-    {
-      exitLoop = true;
-      break;
-    }
-  }
-}
-
-void realTimeDisplay()
-{
-  display.clearDisplay();
-  realTimeText(0, 0, "Real Time Data");
-  while (!exitLoop)
-  {
-    display.clearDisplay();
-    OxyBpm();
-  }
-  exitLoop = false;
   StartStopBtn.state = false;
-}
+  // selection number, use to return selection value
+  int current_sel = 1;
 
-void realTimeText(int c1, int c2, char *text1)
-{
+  batteryMenuText("Percentage");
   display.setTextSize(2);
-  display.setCursor(c1, c2);
-  display.print(F(text1));
+  display.print(FuelGauge.getSoC());
+  display.print(" %");
   display.display();
-}
 
-void recordGPS()
-{
-  double lat;
-  double lng;
-  bool done = false;
-  for (int i = 0; i < 20; i++)
+  // while not click ok button (StartStop)
+  while (!StartStopBtn.state)
   {
-    delay(50);
-    while (ss.available() > 0)
-      if (gps.encode(ss.read()))
-      {
-        if (gps.location.isValid())
-        {
-          lat = gps.location.lat();
-          Serial.print(lat);
-          Serial.print(F(","));
-          lng = gps.location.lng();
-          Serial.println(lng);
-          done = true;
-        }
-        else
-        {
-          Serial.print(F("INVALID"));
-        }
-      }
-      else if (millis() > 5000 && gps.charsProcessed() < 10)
-      {
-        Serial.println(F("No GPS detected: check wiring."));
-        while (true)
-          ;
-      }
 
-    if (done)
+    // shift selection when Next button detect change state
+    if (NextBtn.state)
     {
-      break;
+      current_sel++;
+
+      // change current selection
+      if (current_sel == 4)
+      {
+        batteryMenuText("Percentage");
+        display.print(FuelGauge.getSoC());
+        display.print(" %");
+        display.display();
+        current_sel = 1;
+      }
+      else if (current_sel == 2)
+      {
+        batteryMenuText("Remaining");
+      }
+      else if (current_sel == 3)
+      {
+        batteryMenuText("Voltage");
+        display.print(FuelGauge.getVCell());
+        display.print(" V");
+        display.display();
+      }
+
+      // reset next button state
+      NextBtn.state = false;
     }
-  }
 
-  doc.set(String(position_latitudeLoc), lat);
-  doc.set(String(position_logitudeLoc), lng);
+    delay(10);
+  }
+  // reset startstop button state after operation is selected
+  StartStopBtn.state = false;
+  delay(100);
 }
 
-void warmUpGPS()
+int menu()
 {
-  Serial.print(F("Location: "));
-  if (gps.location.isValid())
-  {
-    double lat = (gps.location.lat());
-    Serial.print(lat);
-    Serial.print(F(","));
-    double lng = (gps.location.lng());
-    Serial.print(lng);
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
-  }
+  Serial.println("Menu GO");
+  // selection number, use to return selection value
+  int current_sel = 1;
 
-  Serial.print(F("  Date/Time: "));
-  if (gps.date.isValid())
+  // print for the first time, change display to oled
+  mainMenuText("1.", "RTM Rec.", "Menu :");
+  // while not click ok button (StartStop)
+  while (!StartStopBtn.state)
   {
-    Serial.print(gps.date.month());
-    Serial.print(F("/"));
-    Serial.print(gps.date.day());
-    Serial.print(F("/"));
-    Serial.print(gps.date.year());
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
-  }
 
-  Serial.print(F(" "));
-  if (gps.time.isValid())
-  {
-    if (gps.time.hour() < 10)
-      Serial.print(F("0"));
-    Serial.print(gps.time.hour());
-    Serial.print(F(":"));
-    if (gps.time.minute() < 10)
-      Serial.print(F("0"));
-    Serial.print(gps.time.minute());
-    Serial.print(F(":"));
-    if (gps.time.second() < 10)
-      Serial.print(F("0"));
-    Serial.print(gps.time.second());
-    Serial.print(F("."));
-    if (gps.time.centisecond() < 10)
-      Serial.print(F("0"));
-    Serial.print(gps.time.centisecond());
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
-  }
+    // shift selection when Next button detect change state
 
-  Serial.println();
+    if (NextBtn.state)
+    {
+      Serial.println(NextBtn.state);
+      delay(100);
+      NextBtn.state = false;
+      current_sel++;
+
+      // change current selection
+      if (current_sel == 6)
+      {
+        mainMenuText("1.", "RTM Rec.", "Menu :");
+        current_sel = 1;
+      }
+      else if (current_sel == 2)
+      {
+        mainMenuText("2.", "View Only", "Menu :");
+      }
+      else if (current_sel == 3)
+      {
+        mainMenuText("3.", "Setting", "Menu :");
+      }
+      else if (current_sel == 4)
+      {
+        mainMenuText("4.", "Sleep", "Menu :");
+      }
+      else if (current_sel == 5)
+      {
+        mainMenuText("5.", "Battery", "Menu :");
+      }
+
+      // reset next button state
+      NextBtn.state = false;
+    }
+    delay(100);
+    NextBtn.state = false;
+    delay(200);
+  }
+  // reset startstop button state after operation is selected
+  StartStopBtn.state = false;
+  delay(100);
+
+  // return selection
+  return current_sel;
 }
 
+int settingMenu()
+{
+  // selection number, use to return selection value
+  int current_sel = 1;
+
+  // print for the first time, change display to oled
+  mainMenuText("1.", "WIFI", "Set :");
+
+  // while not click ok button (StartStop)
+  while (!StartStopBtn.state)
+  {
+
+    // shift selection when Next button detect change state
+    if (NextBtn.state)
+    {
+      current_sel++;
+
+      // change current selection
+      if (current_sel == 4)
+      {
+        mainMenuText("1.", "WiFI", "Set :");
+        current_sel = 1;
+      }
+      else if (current_sel == 2)
+      {
+        mainMenuText("2.", "Account", "Set :");
+      }
+      else if (current_sel == 3)
+      {
+        mainMenuText("3.", "Exit", "Set :");
+      }
+
+      // reset next button state
+      NextBtn.state = false;
+    }
+
+    delay(100);
+  }
+  // reset startstop button state after operation is selected
+  StartStopBtn.state = false;
+  delay(100);
+
+  // return selection
+  return current_sel;
+}
+
+void ConfigOperation()
+{
+  int setting_select = settingMenu();
+
+  if (setting_select == 1)
+  { // WiFi
+    ConfigureWifi();
+
+    // operation 2
+  }
+  else if (setting_select == 2)
+  { // Account
+    ConfigureUid();
+  }
+  else if (setting_select == 3)
+  {
+    exit;
+  }
+}
+
+// control loop
 void uploadSituationalControlLoop()
 {
   // selection number, use to return selection value
@@ -1513,13 +1477,65 @@ void wifiSituationalControlLoop()
   StartStopBtn.state = false;
   delay(100);
 }
-// interrupt call funcion
-void IRAM_ATTR StartStop()
+
+// text display
+void mainMenuText(char *num, char *text, char *title)
 {
-  StartStopBtn.state = true;
+  display.clearDisplay();
+
+  display.setCursor(0, 0);
+  display.println(F(title));
+  display.setCursor(50, 20);
+  display.println(F(num));
+
+  display.setCursor(0, 45);
+  display.println(F(text));
+  display.display();
 }
 
-void IRAM_ATTR Next()
+void settingMenuText(char *text1, char *text2)
 {
-  NextBtn.state = true;
+  display.clearDisplay();
+
+  display.setCursor(5, 0);
+  display.setTextSize(1);
+  display.println(F("[Setting]"));
+  display.setTextSize(2);
+  display.setCursor(0, 20);
+  display.println(F(text1));
+
+  display.setCursor(0, 45);
+  display.println(F(text2));
+  display.display();
+}
+
+void realTimeText(int c1, int c2, char *text1)
+{
+  display.setTextSize(2);
+  display.setCursor(c1, c2);
+  display.print(F(text1));
+  display.display();
+}
+
+void batteryMenuText(char *text1)
+{
+  display.clearDisplay();
+  // Battery Menu
+  display.setCursor(5, 0);
+  display.setTextSize(1);
+  display.println(F("[Battery]"));
+  display.setTextSize(2);
+
+  display.setCursor(0, 20);
+  display.println(F(text1));
+
+  display.display();
+}
+
+void initialDisp(char *ini)
+{
+  display.clearDisplay();
+  display.setCursor(0, 15);
+  display.println(F(ini));
+  display.display();
 }
