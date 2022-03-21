@@ -849,24 +849,24 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
   // moving
   if (accXavg > 0 || accYavg > 0 || accZavg > 0)
   { // proper value require
-    // log move
+    Serial.println("moving");
   }
   else
   {
-    if ((pitchavg > 0 && pitchavg < 0) || (pitchavg > 0 && pitchavg < 0))
+    if ((rollavg > 60 && rollavg < 120) && (pitchavg > -30 && pitchavg < 30))
     {
       if (magavg > benchMag - 60)
       {
-        // sit
+        Serial.println("sitting");
       }
       else
       {
-        // stand
+        Serial.println("standing");
       }
     }
-    else if ((rollavg > 0 && rollavg < 0) || (rollavg > 0 && rollavg < 0))
+    else //if ((pitchavg > 50 && pitchavg < 110) || (pitchavg > -110 && pitchavg < -50))
     {
-      // lay
+      Serial.println("laying down");
     }
   }
 }
