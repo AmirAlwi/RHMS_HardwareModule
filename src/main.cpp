@@ -941,10 +941,11 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
   // moving
   if (maxMovY > standAdxY - 5 && (maxMovX > standAdxX + 2))
   { // proper value require
+<<<<<<< HEAD
     if (pitchavg > -40 && pitchavg < 40){
       if (maxMovX > standAdxX + 6)
     {
-      state = 3
+      *state = 3;
       Serial.println("Running");
     }else{
       Serial.println("walking");
@@ -954,6 +955,13 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
   else
   {
     if ((pitchavg > -130 && pitchavg < -50) || (rollavg > -35 && rollavg < 35))
+=======
+    Serial.println("moving");
+  }
+  else
+  {
+    if ((rollavg > 60 && rollavg < 120) && (pitchavg > -30 && pitchavg < 30))
+>>>>>>> bb3f64b793385f8697510ddb3c6addc2f193ee00
     {
       Serial.println("lay");
     }
@@ -961,6 +969,7 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
     {
       if (maxMovZ > 6) // adx
       {
+<<<<<<< HEAD
         Serial.println("sit");
       }
       else
@@ -968,6 +977,19 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
         Serial.println("stand");
       }
     }
+=======
+        Serial.println("sitting");
+      }
+      else
+      {
+        Serial.println("standing");
+      }
+    }
+    else //if ((pitchavg > 50 && pitchavg < 110) || (pitchavg > -110 && pitchavg < -50))
+    {
+      Serial.println("laying down");
+    }
+>>>>>>> bb3f64b793385f8697510ddb3c6addc2f193ee00
   }
 
   Serial.println((String)pitchavg + " " + rollavg + " " + maxMovX + " " + maxMovY + " " + maxMovZ + " " + maxAccX + " " + maxAccY + " " + maxAccZ + " " + standAdxX + " " + standAdxY + " " + standAdxZ + " " + standAccX + " " + standAccY + " " + standAccZ);
