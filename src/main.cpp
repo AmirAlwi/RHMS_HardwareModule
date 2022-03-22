@@ -3,7 +3,7 @@
 
 #include <SPI.h>
 #include "time.h"
-#include <Preferences.h> 
+#include <Preferences.h>
 
 #include <TinyGPSPlus.h> //gps uart
 #include <SoftwareSerial.h>
@@ -12,7 +12,8 @@
 #include <Adafruit_GFX.h>
 #include "Adafruit_Sensor.h"
 
-#include "Adafruit_MLX90614.h" //temperature
+#include <Adafruit_ADXL345_U.h> //adxl345
+#include "Adafruit_MLX90614.h"  //temperature
 
 #include "MAX30105.h" //max30102
 #include "heartRate.h"
@@ -43,7 +44,7 @@ struct Button
   bool state;
 };
 
-//global var
+// global var
 String WIFI_SSID = "";
 String WIFI_PASSWORD = "";
 String UID = "";
@@ -79,13 +80,15 @@ float roll_buffer[6] = {0, 0, 0, 0, 0, 0};
 float accX_buffer[6] = {0, 0, 0, 0, 0, 0};
 float accY_buffer[6] = {0, 0, 0, 0, 0, 0};
 float accZ_buffer[6] = {0, 0, 0, 0, 0, 0};
-float mag_buffer[6] = {0, 0, 0, 0, 0, 0};
-float benchMag;
+float AdxaccX_buffer[6] = {0, 0, 0, 0, 0, 0};
+float AdxaccY_buffer[6] = {0, 0, 0, 0, 0, 0};
+float AdxaccZ_buffer[6] = {0, 0, 0, 0, 0, 0};
 
 // sensor & module
 BluetoothSerial SerialBT;
 Preferences storeSetting;
 
+Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 Adafruit_MLX90614 mlx;
 MAX30105 particleSensor;
@@ -124,6 +127,7 @@ void getSSID_PASSWORD();
 void setupMax30102();
 void setupMpu();
 void setupMlx();
+void setupAdx();
 void setupGPS();
 void initialDisp(char *ini);
 
@@ -139,11 +143,11 @@ void recordGPS();
 void recordTimeMillis(bool isstart);
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
-void recordMpu(int buffer_position, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg);
-void record_position(int jsonArrayCounter, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float magavg, float *accZavg);
+void recordMove(int buffer_position, float *pitchavg, float *rollavg);
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ);
 void warmUpGPS();
 void warmUpMax(int32_t length);
-void warmUpMpu(float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg);
+void warmUpMpu(float *pitchavg, float *rollavg, float *standPitch, float *standRoll, float *standAccX, float *standAccY, float *standAccZ, float *standAdxX, float *standAdxY, float *standAdxZ);
 
 unsigned long get_Epoch_Time();
 void realTimeDisplay();
@@ -180,6 +184,7 @@ void setup()
   initialDisp("Booting Up ....");
 
   setupMpu();
+  setupAdx();
 
   setupMlx();
   initialDisp("Booting Up ......");
@@ -200,11 +205,10 @@ void loop()
 
   selectOperation(program_selection);
 
-  delay(1000);
+  delay(500);
 }
 
 //####################################################################################################################//
-
 void selectOperation(int program_selection)
 {
   if (program_selection == 1)
@@ -218,7 +222,7 @@ void selectOperation(int program_selection)
       recordTimeMillis(false);
       recordGPS();
 
-      doc.set(String(titleLoc) + "stringValue", "Health Check" + String(bootCount));
+      doc.set(String(titleLoc) + "stringValue", "Health Check Demo" + String(bootCount));
       doc.set(String(uidLoc) + "stringValue", UID);
       doc.set(String(notesLoc) + "stringValue", "routine monitoring");
       doc.set(String(bpUpLoc), 0);
@@ -277,14 +281,22 @@ void selectOperation(int program_selection)
 
 void startActivity(uint32_t *startTimeMillis)
 {
+  float standPitch = 0;
+  float standRoll = 0;
+
+  float standAccX = 0;
+  float standAccY = 0;
+  float standAccZ = 0;
 
   float pitchavg = 0;
   float rollavg = 0;
-  float accXavg = 0;
-  float accYavg = 0;
-  float accZavg = 0;
-  float magavg = 0;
-  bool moving = false;
+
+  float standAdxX, standAdxY, standAdxZ = 0;
+
+  float maxMovX, maxMovY, maxMovZ = 0;
+  float maxAccX, maxAccY, maxAccZ = 0;
+
+  int state = 1;  //1 stand, 2 walk, 3 run, 4 sit, 5 lay
 
   Serial.println("running task");
   StartStopBtn.state = false;
@@ -293,7 +305,16 @@ void startActivity(uint32_t *startTimeMillis)
   int jsonArrayCounter = 0;
   int buffer_position = 0;
 
-  warmUpMpu(&pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(F("Stand, Hand"));
+  display.setCursor(0, 25);
+  display.println(F("Aside 5sec"));
+  display.display();
+  delay(2500);
+
+  warmUpMpu(&pitchavg, &rollavg, &standPitch, &standRoll, &standAccX, &standAccY, &standAccZ, &standAdxX, &standAdxY, &standAdxZ);
 
   static uint32_t prev_ms = millis();
 
@@ -344,7 +365,7 @@ void startActivity(uint32_t *startTimeMillis)
 
     if (mpu.update())
     {
-      recordMpu(buffer_position, &pitchavg, &rollavg, &accXavg, &accYavg, &accZavg);
+      recordMove(buffer_position, &pitchavg, &rollavg);
       if (++buffer_position > 5)
       {
         buffer_position = 0;
@@ -355,10 +376,45 @@ void startActivity(uint32_t *startTimeMillis)
     {
       prev_ms = millis();
 
+      maxMovX = AdxaccX_buffer[0];
+      maxMovY = AdxaccY_buffer[0];
+      maxMovZ = AdxaccZ_buffer[0];
+      maxAccX = accX_buffer[0];
+      maxAccY = accY_buffer[0];
+      maxAccZ = accZ_buffer[0];
+
+      for (int i = 1; i < 6; i++)
+      {
+        if (maxMovX < AdxaccX_buffer[i])
+        {
+          maxMovX = AdxaccX_buffer[i];
+        }
+        if (maxMovY < AdxaccY_buffer[i])
+        {
+          maxMovY = AdxaccY_buffer[i];
+        }
+        if (maxMovZ < AdxaccZ_buffer[i])
+        {
+          maxMovZ = AdxaccZ_buffer[i];
+        }
+        if (maxAccX < accX_buffer[i])
+        {
+          maxAccX = accX_buffer[i];
+        }
+        if (maxAccY < accY_buffer[i])
+        {
+          maxAccY = accY_buffer[i];
+        }
+        if (maxAccZ < accZ_buffer[i])
+        {
+          maxAccZ = accZ_buffer[i];
+        }
+      }
+
+      record_position(jsonArrayCounter, pitchavg, rollavg, maxMovX, maxMovY, maxMovZ, maxAccX, maxAccY, maxAccZ, standAdxX, standAdxY, standAdxZ, standAccX, standAccY, standAccZ, &state);
       recordSpoHeartrate(jsonArrayCounter);
       recordTemperature(jsonArrayCounter);
       getTimeElapsed(startTimeMillis);
-      record_position(jsonArrayCounter, pitchavg, rollavg, accXavg, accYavg, accZavg, magavg, &moving);
       jsonArrayCounter++;
     }
 
@@ -578,7 +634,7 @@ void setupMpu()
   setting.accel_fchoice = 0x01;
   setting.accel_dlpf_cfg = ACCEL_DLPF_CFG::DLPF_45HZ;
 
-  while (!mpu.setup(0x69))
+  while (!mpu.setup(0x68))
   { // change to your own address
     Serial.println("MPU connection failed. ");
     delay(1000);
@@ -615,6 +671,18 @@ void setupMpu()
   mpu.setMagneticDeclination(-0.14);
   mpu.setFilterIterations(10);
   mpu.verbose(false);
+}
+
+void setupAdx()
+{
+
+  if (!accel.begin(0x53))
+  {
+    Serial.println("Ooops, no ADXL345 detected ... Check your wiring!");
+    while (1)
+      ;
+  }
+  accel.setRange(ADXL345_RANGE_2_G);
 }
 
 void setupMlx()
@@ -694,9 +762,10 @@ void warmUpGPS()
   Serial.println();
 }
 
-void warmUpMpu(float *pitch, float *roll, float *accX, float *accY, float *accZ)
+void warmUpMpu(float *avgpitch, float *avgroll, float *standPitch, float *standRoll, float *standAccX, float *standAccY, float *standAccZ, float *standAdxX, float *standAdxY, float *standAdxZ)
 {
   static uint32_t prev_ms = millis();
+  float accY, accZ, accX = 0;
 
   int x = 0;
   while (x < 6)
@@ -706,30 +775,41 @@ void warmUpMpu(float *pitch, float *roll, float *accX, float *accY, float *accZ)
       if (millis() > prev_ms + 100)
       {
         pitch_buffer[x] = mpu.getPitch();
-        *pitch += pitch_buffer[x];
+        *avgpitch += pitch_buffer[x];
 
         roll_buffer[x] = mpu.getRoll();
-        *roll += roll_buffer[x];
+        *avgroll += roll_buffer[x];
 
-        accX_buffer[x] = mpu.getAccX();
-        *accX += accX_buffer[x];
+        accX_buffer[x] = abs(mpu.getAccX());
+        accX += accX_buffer[x];
 
-        accY_buffer[x] = mpu.getAccY();
-        *accY += accY_buffer[x];
+        accY_buffer[x] = abs(mpu.getAccY());
+        accY += accY_buffer[x];
 
-        accZ_buffer[x] = mpu.getAccZ();
-        *accZ += accZ_buffer[x];
+        accZ_buffer[x] = abs(mpu.getAccZ());
+        accZ += accZ_buffer[x];
+
         prev_ms = millis();
         x++;
       }
     }
   }
 
-  *pitch = *pitch / 6;
-  *roll = *roll / 6;
-  *accX = *accX / 6;
-  *accY = *accY / 6;
-  *accZ = *accZ / 6;
+  *standPitch = *avgpitch = *avgpitch / 6;
+  *standRoll = *avgroll = *avgroll / 6;
+  *standAccX = accX / 6;
+  *standAccY = accY / 6;
+  *standAccZ = accZ / 6;
+
+  sensors_event_t event;
+  accel.getEvent(&event);
+
+  *standAdxX = abs(event.acceleration.x);
+  *standAdxY = abs(event.acceleration.y);
+  *standAdxZ = abs(event.acceleration.z);
+
+  Serial.println("first value");
+  Serial.println((String)*standPitch + " " + *standRoll + " " + *standAccX + " " + *standAccY + " " + *standAccZ);
 }
 
 void warmUpMax(int32_t length)
@@ -750,7 +830,7 @@ void warmUpMax(int32_t length)
   maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
 }
 
-//data logging
+// data logging
 void recordGPS()
 {
   double lat;
@@ -818,57 +898,79 @@ void recordTemperature(int jsonArrayCounter)
   Serial.println("*C");
 }
 
-void recordMpu(int buffer_position, float *pitchavg, float *rollavg, float *accXavg, float *accYavg, float *accZavg)
+void recordMove(int buffer_position, float *pitchavg, float *rollavg)
 {
-  float pitch, roll, accX, accY, accZ;
+  float pitch, roll;
 
   pitch = mpu.getPitch();
   *pitchavg = *pitchavg - (pitch_buffer[buffer_position] - pitch) / 6;
   pitch_buffer[buffer_position] = pitch;
+  Serial.println(pitch);
 
   roll = mpu.getRoll();
   *rollavg = *rollavg - (roll_buffer[buffer_position] - roll) / 6;
   roll_buffer[buffer_position] = roll;
+  Serial.println(roll);
+  // accX = abs(mpu.getAccX());
+  // *accXavg = *accXavg - (accX_buffer[buffer_position] - accX) / 6;
+  // accX_buffer[buffer_position] = accX;
 
-  accX = mpu.getAccX();
-  *accXavg = *accXavg - (accX_buffer[buffer_position] - accX) / 6;
-  accX_buffer[buffer_position] = accX;
+  // accY = abs(mpu.getAccY());
+  // *accYavg = *accYavg - (accY_buffer[buffer_position] - accY) / 6;
+  // accY_buffer[buffer_position] = accY;
 
-  accY = mpu.getAccY();
-  *accYavg = *accYavg - (accY_buffer[buffer_position] - accY) / 6;
-  accY_buffer[buffer_position] = accY;
+  // accZ = abs(mpu.getAccZ());
+  // *accZavg = *accZavg - (accZ_buffer[buffer_position] - accZ) / 6;
+  // accZ_buffer[buffer_position] = accZ;
 
-  accZ = mpu.getAccZ();
-  *accZavg = *accZavg - (accZ_buffer[buffer_position] - accZ) / 6;
-  accZ_buffer[buffer_position] = accZ;
+  accX_buffer[buffer_position] = abs(mpu.getAccX());
+  accY_buffer[buffer_position] = abs(mpu.getAccY());
+  accZ_buffer[buffer_position] = abs(mpu.getAccZ());
+
+  sensors_event_t event;
+  accel.getEvent(&event);
+
+  AdxaccX_buffer[buffer_position] = abs(event.acceleration.x);
+  AdxaccY_buffer[buffer_position] = abs(event.acceleration.y);
+  AdxaccZ_buffer[buffer_position] = abs(event.acceleration.z);
 }
 
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float accXavg, float accYavg, float accZavg, float magavg, bool *moving)
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state)
 {
   // 1 move, 2 stand, 3 lay
   // moving
-  if (accXavg > 0 || accYavg > 0 || accZavg > 0)
+  if (maxMovY > standAdxY - 5 && (maxMovX > standAdxX + 2))
   { // proper value require
-    // log move
+    if (pitchavg > -40 && pitchavg < 40){
+      if (maxMovX > standAdxX + 6)
+    {
+      state = 3
+      Serial.println("Running");
+    }else{
+      Serial.println("walking");
+    }
+    }  
   }
   else
   {
-    if ((pitchavg > 0 && pitchavg < 0) || (pitchavg > 0 && pitchavg < 0))
+    if ((pitchavg > -130 && pitchavg < -50) || (rollavg > -35 && rollavg < 35))
     {
-      if (magavg > benchMag - 60)
+      Serial.println("lay");
+    }
+    else if ((pitchavg > -40 && pitchavg < 40))
+    {
+      if (maxMovZ > 6) // adx
       {
-        // sit
+        Serial.println("sit");
       }
       else
       {
-        // stand
+        Serial.println("stand");
       }
     }
-    else if ((rollavg > 0 && rollavg < 0) || (rollavg > 0 && rollavg < 0))
-    {
-      // lay
-    }
   }
+
+  Serial.println((String)pitchavg + " " + rollavg + " " + maxMovX + " " + maxMovY + " " + maxMovZ + " " + maxAccX + " " + maxAccY + " " + maxAccZ + " " + standAdxX + " " + standAdxY + " " + standAdxZ + " " + standAccX + " " + standAccY + " " + standAccZ);
 }
 
 // utility function
