@@ -144,7 +144,7 @@ void recordTimeMillis(bool isstart);
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 void recordMove(int buffer_position, float *pitchavg, float *rollavg);
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ);
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state);
 void warmUpGPS();
 void warmUpMax(int32_t length);
 void warmUpMpu(float *pitchavg, float *rollavg, float *standPitch, float *standRoll, float *standAccX, float *standAccY, float *standAccZ, float *standAdxX, float *standAdxY, float *standAdxZ);
@@ -296,7 +296,7 @@ void startActivity(uint32_t *startTimeMillis)
   float maxMovX, maxMovY, maxMovZ = 0;
   float maxAccX, maxAccY, maxAccZ = 0;
 
-  int state = 1;  //1 stand, 2 walk, 3 run, 4 sit, 5 lay
+  int state = 1; // 1 stand, 2 walk, 3 run, 4 sit, 5 lay
 
   Serial.println("running task");
   StartStopBtn.state = false;
@@ -941,55 +941,62 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
   // moving
   if (maxMovY > standAdxY - 5 && (maxMovX > standAdxX + 2))
   { // proper value require
-<<<<<<< HEAD
-    if (pitchavg > -40 && pitchavg < 40){
-      if (maxMovX > standAdxX + 6)
+    if (pitchavg > -40 && pitchavg < 40)
     {
-      *state = 3;
-      Serial.println("Running");
-    }else{
-      Serial.println("walking");
+      if (maxMovX > standAdxX + 6)
+      {
+        *state = 3;
+        // Serial.println("Running");
+      }
+      else
+      {
+        *state = 2;
+        // Serial.println("walking");
+      }
     }
-    }  
   }
   else
   {
     if ((pitchavg > -130 && pitchavg < -50) || (rollavg > -35 && rollavg < 35))
-=======
-    Serial.println("moving");
-  }
-  else
-  {
-    if ((rollavg > 60 && rollavg < 120) && (pitchavg > -30 && pitchavg < 30))
->>>>>>> bb3f64b793385f8697510ddb3c6addc2f193ee00
-    {
-      Serial.println("lay");
+    { 
+      *state = 5;
+      // Serial.println("lay");
     }
     else if ((pitchavg > -40 && pitchavg < 40))
     {
       if (maxMovZ > 6) // adx
       {
-<<<<<<< HEAD
-        Serial.println("sit");
+        *state = 4;
+        // Serial.println("sit");
       }
       else
       {
-        Serial.println("stand");
+        *state = 1;
+        // Serial.println("stand");
       }
     }
-=======
-        Serial.println("sitting");
-      }
-      else
-      {
-        Serial.println("standing");
-      }
-    }
-    else //if ((pitchavg > 50 && pitchavg < 110) || (pitchavg > -110 && pitchavg < -50))
-    {
-      Serial.println("laying down");
-    }
->>>>>>> bb3f64b793385f8697510ddb3c6addc2f193ee00
+  }
+
+
+  switch (*state)
+  {
+  case 1:
+    Serial.println("stand");
+    break;
+  case 2:
+    Serial.println("walk");
+    break;
+  case 3:
+    Serial.println("run");
+    break;
+  case 4:
+    Serial.println("sit");
+    break;
+  case 5:
+    Serial.println("lay");
+    break;
+  default:
+    break;
   }
 
   Serial.println((String)pitchavg + " " + rollavg + " " + maxMovX + " " + maxMovY + " " + maxMovZ + " " + maxAccX + " " + maxAccY + " " + maxAccZ + " " + standAdxX + " " + standAdxY + " " + standAdxZ + " " + standAccX + " " + standAccY + " " + standAccZ);
