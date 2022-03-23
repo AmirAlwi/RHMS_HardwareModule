@@ -223,9 +223,9 @@ void selectOperation(int program_selection)
       recordTimeMillis(false);
       recordGPS();
 
-      doc.set(String(titleLoc) + "stringValue", "Health Check Demo" + String(bootCount));
+      doc.set(String(titleLoc) + "stringValue", "ISDP Demo" + String(bootCount));
       doc.set(String(uidLoc) + "stringValue", UID);
-      doc.set(String(notesLoc) + "stringValue", "routine monitoring");
+      doc.set(String(notesLoc) + "stringValue", "Health Monitoring");
       doc.set(String(bpUpLoc), 0);
       doc.set(String(bpLowLoc), 0);
       // Serial.print("time elapsed : ");
@@ -613,12 +613,12 @@ void setupMax30102()
   }
 
   // Max30102 setting
-  byte ledBrightness = 5;
+  byte ledBrightness = 40;
   byte sampleAverage = 2;
   byte ledMode = 2;
   byte sampleRate = 200;
   int pulseWidth = 215;
-  int adcRange = 2048;
+  int adcRange = 4096;
 
   particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange);
 }
@@ -1326,7 +1326,10 @@ void batteryMenu()
   // while not click ok button (StartStop)
   while (!StartStopBtn.state)
   {
-
+    float percent = 0;
+    float remain = 0;
+    int min = 0;
+    int hour = 0;
     // shift selection when Next button detect change state
     if (NextBtn.state)
     {
@@ -1343,13 +1346,26 @@ void batteryMenu()
       }
       else if (current_sel == 2)
       {
-        batteryMenuText("Remaining");
-      }
-      else if (current_sel == 3)
-      {
         batteryMenuText("Voltage");
         display.print(FuelGauge.getVCell());
         display.print(" V");
+        display.display();
+      }
+      else if (current_sel == 3)
+      {
+        batteryMenuText("Remaining");
+        percent = FuelGauge.getSoC();
+        remain = percent / 5.38;
+        min = fmod(remain, 1)*60;
+        hour = floor(remain);
+        Serial.println(remain);
+        Serial.println(min);
+        Serial.println(hour);
+      
+        display.print(hour);
+        display.print(" h ");
+        display.print(min);
+        display.print(" m");
         display.display();
       }
 
