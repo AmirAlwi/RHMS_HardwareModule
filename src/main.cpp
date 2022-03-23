@@ -983,27 +983,27 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
     }
   }
 
-
-  switch (*state)
-  {
-  case 1:
-    Serial.println("stand");
-    break;
-  case 2:
-    Serial.println("walk");
-    break;
-  case 3:
-    Serial.println("run");
-    break;
-  case 4:
-    Serial.println("sit");
-    break;
-  case 5:
-    Serial.println("lay");
-    break;
-  default:
-    break;
-  }
+  doc.set(String(postureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", state);
+  // switch (*state)
+  // {
+  // case 1:
+    
+  //   break;
+  // case 2:
+  //   Serial.println("walk");
+  //   break;
+  // case 3:
+  //   Serial.println("run");
+  //   break;
+  // case 4:
+  //   Serial.println("sit");
+  //   break;
+  // case 5:
+  //   Serial.println("lay");
+  //   break;
+  // default:
+  //   break;
+  // }
 
   Serial.println((String)pitchavg + " " + rollavg + " " + maxMovX + " " + maxMovY + " " + maxMovZ + " " + maxAccX + " " + maxAccY + " " + maxAccZ + " " + standAdxX + " " + standAdxY + " " + standAdxZ + " " + standAccX + " " + standAccY + " " + standAccZ);
 }
