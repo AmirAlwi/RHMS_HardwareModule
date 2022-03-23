@@ -62,6 +62,7 @@ uint32_t irBuffer[90];
 uint32_t redBuffer[90];
 int32_t bufferLength;
 int32_t spo2;
+int32_t prevSpo2 = 92;
 int8_t validSPO2;
 int32_t heartRate;
 int32_t heartRateBuffer[20];
@@ -877,8 +878,13 @@ void recordSpoHeartrate(int jsonArrayCounter)
 {
   int32_t averageHeartRate = hrAvg / 20;
 
+    if (spo2 > 0)
+  {
+    prevSpo2 = spo2;
+  }
+
   doc.set(String(heartrateLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", averageHeartRate);
-  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", spo2);
+  doc.set(String(oximeterLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", prevSpo2);
 
   Serial.print(F(", Avg HR="));
   Serial.print(averageHeartRate, DEC);
