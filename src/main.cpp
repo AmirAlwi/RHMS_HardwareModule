@@ -145,7 +145,7 @@ void recordTimeMillis(bool isstart);
 void recordSpoHeartrate(int jsonArrayCounter);
 void recordTemperature(int jsonArrayCounter);
 void recordMove(int buffer_position, float *pitchavg, float *rollavg);
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state);
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state, bool *fall);
 void warmUpGPS();
 void warmUpMax(int32_t length);
 void warmUpMpu(float *pitchavg, float *rollavg, float *standPitch, float *standRoll, float *standAccX, float *standAccY, float *standAccZ, float *standAdxX, float *standAdxY, float *standAdxZ);
@@ -282,6 +282,7 @@ void selectOperation(int program_selection)
 
 void startActivity(uint32_t *startTimeMillis)
 {
+  bool fall = false;
   float standPitch = 0;
   float standRoll = 0;
 
@@ -412,7 +413,7 @@ void startActivity(uint32_t *startTimeMillis)
         }
       }
 
-      record_position(jsonArrayCounter, pitchavg, rollavg, maxMovX, maxMovY, maxMovZ, maxAccX, maxAccY, maxAccZ, standAdxX, standAdxY, standAdxZ, standAccX, standAccY, standAccZ, &state);
+      record_position(jsonArrayCounter, pitchavg, rollavg, maxMovX, maxMovY, maxMovZ, maxAccX, maxAccY, maxAccZ, standAdxX, standAdxY, standAdxZ, standAccX, standAccY, standAccZ, &state, &fall);
       recordSpoHeartrate(jsonArrayCounter);
       recordTemperature(jsonArrayCounter);
       getTimeElapsed(startTimeMillis);
@@ -941,7 +942,7 @@ void recordMove(int buffer_position, float *pitchavg, float *rollavg)
   AdxaccZ_buffer[buffer_position] = abs(event.acceleration.z);
 }
 
-void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state)
+void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float maxMovX, float maxMovY, float maxMovZ, float maxAccX, float maxAccY, float maxAccZ, float standAdxX, float standAdxY, float standAdxZ, float standAccX, float standAccY, float standAccZ, int *state, bool *fall)
 {
   // 1 move, 2 stand, 3 lay
   // moving
@@ -958,10 +959,15 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
       {
         *state = 2;
         // Serial.println("walking");
+      }    
+    } else if ((pitchavg > -130 && pitchavg < -50) || (rollavg > -35 && rollavg < 35)){
+      if (maxMovX > standAdxX +3){
+        *fall = true;
       }
     }
+    
   }
-  else
+  else 
   {
     if ((pitchavg > -130 && pitchavg < -50) || (rollavg > -35 && rollavg < 35))
     { 
@@ -978,12 +984,18 @@ void record_position(int jsonArrayCounter, float pitchavg, float rollavg, float 
       else
       {
         *state = 1;
+        *fall = false;
         // Serial.println("stand");
       }
     }
   }
 
-  doc.set(String(postureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", state);
+  if(fall){
+      doc.set(String(postureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", 6);
+  } else{
+    doc.set(String(postureLoc) + "[" + String(jsonArrayCounter) + "]/doubleValue", state);
+  }
+
   // switch (*state)
   // {
   // case 1:
